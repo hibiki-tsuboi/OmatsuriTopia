@@ -357,10 +357,13 @@ class GameScene: SKScene {
 
             // 的を削除
             if let spriteComponent = target.component(ofType: SpriteComponent.self) {
-                // ヒットエフェクト
-                let fadeOut = SKAction.fadeOut(withDuration: 0.2)
-                let scaleUp = SKAction.scale(to: 1.5, duration: 0.2)
-                let group = SKAction.group([fadeOut, scaleUp])
+                // ヒットエフェクト：射的らしく後ろに飛ぶアニメーション
+                let fadeOut = SKAction.fadeOut(withDuration: 0.5)
+                let scaleDown = SKAction.scale(to: 0.2, duration: 0.5)  // 小さくなって奥に飛ぶ
+                let rotate = SKAction.rotate(byAngle: CGFloat.pi * 2, duration: 0.5)  // 1回転
+                let moveBack = SKAction.moveBy(x: 0, y: 100, duration: 0.5)  // 上（奥）に移動
+
+                let group = SKAction.group([fadeOut, scaleDown, rotate, moveBack])
                 spriteComponent.node.run(group) {
                     spriteComponent.node.removeFromParent()
                 }
