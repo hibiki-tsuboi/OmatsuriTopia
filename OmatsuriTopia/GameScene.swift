@@ -267,22 +267,24 @@ class GameScene: SKScene {
     }
 
     private func setupReloadButton() {
-        // リロードボタン（発射ボタンの左側）
-        let buttonSize: CGFloat = 100
+        // リロードボタン（発射ボタンの左側）- 一般的なゲームUI
+        let buttonWidth: CGFloat = 90
+        let buttonHeight: CGFloat = 90
         let margin: CGFloat = 20
         let spacing: CGFloat = 20
 
-        reloadButton = SKShapeNode(circleOfRadius: buttonSize / 2)
-        reloadButton.fillColor = SKColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 1.0)  // 緑色
-        reloadButton.strokeColor = SKColor(red: 0.0, green: 0.6, blue: 0.0, alpha: 1.0)  // 濃い緑で縁取り
-        reloadButton.lineWidth = 5
-        reloadButton.position = CGPoint(x: size.width - buttonSize / 2 - margin - buttonSize - spacing, y: buttonSize / 2 + margin)
+        // 角丸四角形のボタン
+        reloadButton = SKShapeNode(rect: CGRect(x: -buttonWidth/2, y: -buttonHeight/2, width: buttonWidth, height: buttonHeight), cornerRadius: 15)
+        reloadButton.fillColor = SKColor(red: 0.3, green: 0.5, blue: 0.8, alpha: 1.0)  // 青色
+        reloadButton.strokeColor = SKColor(red: 0.2, green: 0.4, blue: 0.7, alpha: 1.0)  // 濃い青で縁取り
+        reloadButton.lineWidth = 4
+        reloadButton.position = CGPoint(x: size.width - buttonWidth/2 - margin - 100 - spacing, y: buttonHeight/2 + margin)
         reloadButton.zPosition = 100
         reloadButton.name = "reloadButton"
         addChild(reloadButton)
 
         // リロードアイコン（回転矢印）を追加
-        let reloadIcon = createReloadIcon(size: 60)
+        let reloadIcon = createReloadIcon(size: 50)
         reloadIcon.position = CGPoint(x: 0, y: 0)
         reloadButton.addChild(reloadIcon)
     }
@@ -592,13 +594,13 @@ class GameScene: SKScene {
 
     private func updateReloadButtonState() {
         if gameState.isLoaded {
-            // 装填済み：緑色
-            reloadButton.fillColor = SKColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 1.0)
-            reloadButton.strokeColor = SKColor(red: 0.0, green: 0.6, blue: 0.0, alpha: 1.0)
+            // 装填済み：青色
+            reloadButton.fillColor = SKColor(red: 0.3, green: 0.5, blue: 0.8, alpha: 1.0)
+            reloadButton.strokeColor = SKColor(red: 0.2, green: 0.4, blue: 0.7, alpha: 1.0)
         } else {
-            // 未装填：グレー
-            reloadButton.fillColor = SKColor(white: 0.5, alpha: 1.0)
-            reloadButton.strokeColor = SKColor(white: 0.3, alpha: 1.0)
+            // 未装填：暗いグレー
+            reloadButton.fillColor = SKColor(white: 0.4, alpha: 1.0)
+            reloadButton.strokeColor = SKColor(white: 0.2, alpha: 1.0)
         }
     }
 
