@@ -15,9 +15,9 @@ class GameViewController: UIViewController {
         super.viewDidLoad()
 
         if let view = self.view as! SKView? {
-            // プログラムでシーンを作成（横向きiPad用のサイズ）
-            let scene = GameScene(size: CGSize(width: 1334, height: 750))
-            scene.scaleMode = .aspectFill
+            // ビューのサイズに合わせてシーンを作成
+            let scene = GameScene(size: view.bounds.size)
+            scene.scaleMode = .resizeFill  // ビューに完全にフィットさせる
 
             // シーンを表示
             view.presentScene(scene)

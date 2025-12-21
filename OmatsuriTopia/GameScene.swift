@@ -55,14 +55,14 @@ class GameScene: SKScene {
     }
 
     private func setupFestivalBackground() {
-        // グラデーション背景（夕暮れ〜夜のお祭り）
-        self.backgroundColor = SKColor(red: 0.1, green: 0.05, blue: 0.2, alpha: 1.0)
+        // 明るい縁日の背景（青空）
+        self.backgroundColor = SKColor(red: 0.53, green: 0.81, blue: 0.92, alpha: 1.0)
 
         // 装飾用の提灯を追加
         addLanterns()
 
-        // 星を追加
-        addStars()
+        // 雲を追加
+        addClouds()
     }
 
     private func addLanterns() {
@@ -93,27 +93,29 @@ class GameScene: SKScene {
         }
     }
 
-    private func addStars() {
-        // 背景に星を散りばめる
-        for _ in 0..<30 {
-            let star = SKShapeNode(circleOfRadius: CGFloat.random(in: 1...3))
-            star.fillColor = .white
-            star.strokeColor = .clear
-            star.position = CGPoint(
+    private func addClouds() {
+        // 背景に雲を追加
+        for _ in 0..<8 {
+            let cloud = SKShapeNode(ellipseOf: CGSize(
+                width: CGFloat.random(in: 80...150),
+                height: CGFloat.random(in: 40...60)
+            ))
+            cloud.fillColor = .white
+            cloud.strokeColor = .clear
+            cloud.position = CGPoint(
                 x: CGFloat.random(in: 0...size.width),
-                y: CGFloat.random(in: size.height * 0.5...size.height - 50)
+                y: CGFloat.random(in: size.height * 0.6...size.height - 50)
             )
-            star.alpha = CGFloat.random(in: 0.3...0.8)
-            star.zPosition = -2
+            cloud.alpha = 0.7
+            cloud.zPosition = -2
 
-            // キラキラ点滅
-            let twinkle = SKAction.sequence([
-                SKAction.fadeAlpha(to: 0.2, duration: Double.random(in: 0.5...1.5)),
-                SKAction.fadeAlpha(to: 0.8, duration: Double.random(in: 0.5...1.5))
-            ])
-            star.run(SKAction.repeatForever(twinkle))
+            // ゆっくり流れる
+            let drift = SKAction.moveBy(x: size.width + 200, y: 0, duration: Double.random(in: 60...90))
+            let reset = SKAction.moveBy(x: -(size.width + 400), y: 0, duration: 0)
+            let sequence = SKAction.sequence([drift, reset])
+            cloud.run(SKAction.repeatForever(sequence))
 
-            addChild(star)
+            addChild(cloud)
         }
     }
 
@@ -184,21 +186,25 @@ class GameScene: SKScene {
     }
 
     private func setupFireButton() {
-        // 発射ボタン（右下）
-        fireButton = SKShapeNode(rect: CGRect(x: 0, y: 0, width: 100, height: 80), cornerRadius: 10)
-        fireButton.fillColor = SKColor.systemRed
-        fireButton.strokeColor = .white
-        fireButton.lineWidth = 3
-        fireButton.position = CGPoint(x: size.width - 130, y: 30)
+        // 発射ボタン（右下、より大きく目立つように）
+        let buttonWidth: CGFloat = 120
+        let buttonHeight: CGFloat = 100
+        let margin: CGFloat = 20
+
+        fireButton = SKShapeNode(rect: CGRect(x: 0, y: 0, width: buttonWidth, height: buttonHeight), cornerRadius: 15)
+        fireButton.fillColor = SKColor(red: 1.0, green: 0.2, blue: 0.2, alpha: 1.0)  // 明るい赤
+        fireButton.strokeColor = SKColor(red: 0.8, green: 0.0, blue: 0.0, alpha: 1.0)  // 濃い赤で縁取り
+        fireButton.lineWidth = 4
+        fireButton.position = CGPoint(x: size.width - buttonWidth - margin, y: margin)
         fireButton.zPosition = 100
         fireButton.name = "fireButton"
         addChild(fireButton)
 
         fireButtonLabel = SKLabelNode(fontNamed: "Arial-BoldMT")
         fireButtonLabel.text = "FIRE"
-        fireButtonLabel.fontSize = 24
+        fireButtonLabel.fontSize = 32
         fireButtonLabel.fontColor = .white
-        fireButtonLabel.position = CGPoint(x: 50, y: 25)
+        fireButtonLabel.position = CGPoint(x: buttonWidth / 2, y: buttonHeight / 2 - 5)
         fireButtonLabel.verticalAlignmentMode = .center
         fireButtonLabel.horizontalAlignmentMode = .center
         fireButton.addChild(fireButtonLabel)
@@ -414,16 +420,29 @@ class GameScene: SKScene {
             }
         }
 
-        // ゲーム中なら照準器を移動
-        if gameState.isGameActive {
-            moveCrosshair(to: location)
+        // ゲーム中ならスワイプで照準器を移動開始
+        // touchesMovedで実際の移動を処理
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        let location = touch.location(in: self)
+
+        // ゲーム中で、発射ボタンやゲームオーバーパネル以外ならスコープを移動
+        if gameState.isGameActive && !fireButton.contains(location) {
+            moveCrosshairDirect(to: location)
         }
     }
 
-    private func moveCrosshair(to position: CGPoint) {
-        let moveAction = SKAction.move(to: position, duration: 0.15)
-        moveAction.timingMode = .easeOut
-        crosshair.run(moveAction)
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        // 必要に応じて処理を追加
+    }
+
+    private func moveCrosshairDirect(to position: CGPoint) {
+        // 画面内に制限
+        let clampedX = max(30, min(size.width - 30, position.x))
+        let clampedY = max(30, min(size.height - 30, position.y))
+        crosshair.position = CGPoint(x: clampedX, y: clampedY)
     }
 
     // MARK: - Update Loop
