@@ -290,13 +290,13 @@ class GameScene: SKScene {
     private func createReloadIcon(size: CGFloat) -> SKNode {
         let container = SKNode()
 
-        // 円形の矢印を描く
+        // 円形の矢印を描く（時計回り）
         let path = CGMutablePath()
         let radius = size / 2.5
-        let startAngle = CGFloat.pi * 0.2
-        let endAngle = CGFloat.pi * 1.8
+        let startAngle = -CGFloat.pi * 0.7  // 左下から開始
+        let endAngle = CGFloat.pi * 0.5     // 右上で終了
 
-        path.addArc(center: .zero, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: false)
+        path.addArc(center: .zero, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: true)
 
         let arc = SKShapeNode(path: path)
         arc.strokeColor = .white
@@ -304,19 +304,30 @@ class GameScene: SKScene {
         arc.lineCap = .round
         container.addChild(arc)
 
-        // 矢印の先端
-        let arrowPath = CGMutablePath()
+        // 矢印の先端（三角形）
         let arrowX = radius * cos(endAngle)
         let arrowY = radius * sin(endAngle)
+
+        // 矢印の向きを接線方向に
+        let tangentAngle = endAngle + CGFloat.pi / 2
+        let arrowSize: CGFloat = 12
+
+        let arrowPath = CGMutablePath()
         arrowPath.move(to: CGPoint(x: arrowX, y: arrowY))
-        arrowPath.addLine(to: CGPoint(x: arrowX - 15, y: arrowY - 15))
-        arrowPath.move(to: CGPoint(x: arrowX, y: arrowY))
-        arrowPath.addLine(to: CGPoint(x: arrowX + 10, y: arrowY - 12))
+        arrowPath.addLine(to: CGPoint(
+            x: arrowX + arrowSize * cos(tangentAngle + CGFloat.pi * 0.75),
+            y: arrowY + arrowSize * sin(tangentAngle + CGFloat.pi * 0.75)
+        ))
+        arrowPath.addLine(to: CGPoint(
+            x: arrowX + arrowSize * cos(tangentAngle - CGFloat.pi * 0.75),
+            y: arrowY + arrowSize * sin(tangentAngle - CGFloat.pi * 0.75)
+        ))
+        arrowPath.closeSubpath()
 
         let arrowHead = SKShapeNode(path: arrowPath)
+        arrowHead.fillColor = .white
         arrowHead.strokeColor = .white
-        arrowHead.lineWidth = 6
-        arrowHead.lineCap = .round
+        arrowHead.lineWidth = 2
         container.addChild(arrowHead)
 
         return container
