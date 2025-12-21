@@ -118,9 +118,18 @@ class GameScene: SKScene {
     }
 
     private func setupUI() {
-        // スコアアイコン（星）+ 数字（左上）
+        // スコア表示用の背景パネル（左上）
+        let scorePanel = SKShapeNode(rect: CGRect(x: 10, y: size.height - 90, width: 180, height: 70), cornerRadius: 15)
+        scorePanel.fillColor = SKColor(white: 0.0, alpha: 0.7)
+        scorePanel.strokeColor = SKColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 1.0)
+        scorePanel.lineWidth = 3
+        scorePanel.zPosition = 5
+        addChild(scorePanel)
+
+        // スコアアイコン（星）+ 数字
         scoreIcon = createStarIcon()
         scoreIcon.position = CGPoint(x: 30, y: size.height - 50)
+        scoreIcon.zPosition = 10
         addChild(scoreIcon)
 
         scoreLabel = SKLabelNode(fontNamed: "Arial-BoldMT")
@@ -128,12 +137,22 @@ class GameScene: SKScene {
         scoreLabel.fontColor = SKColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 1.0)  // ゴールド
         scoreLabel.position = CGPoint(x: 70, y: size.height - 60)
         scoreLabel.horizontalAlignmentMode = .left
+        scoreLabel.zPosition = 10
         updateScoreLabel()
         addChild(scoreLabel)
 
-        // 弾丸アイコン + 数字（右上）
+        // 弾数表示用の背景パネル（右上）
+        let bulletsPanel = SKShapeNode(rect: CGRect(x: size.width - 160, y: size.height - 90, width: 150, height: 70), cornerRadius: 15)
+        bulletsPanel.fillColor = SKColor(white: 0.0, alpha: 0.7)
+        bulletsPanel.strokeColor = SKColor(red: 1.0, green: 0.3, blue: 0.3, alpha: 1.0)
+        bulletsPanel.lineWidth = 3
+        bulletsPanel.zPosition = 5
+        addChild(bulletsPanel)
+
+        // 弾丸アイコン + 数字
         bulletsIcon = createBulletIcons()
         bulletsIcon.position = CGPoint(x: size.width - 30, y: size.height - 50)
+        bulletsIcon.zPosition = 10
         addChild(bulletsIcon)
 
         bulletsLabel = SKLabelNode(fontNamed: "Arial-BoldMT")
@@ -141,6 +160,7 @@ class GameScene: SKScene {
         bulletsLabel.fontColor = SKColor(red: 1.0, green: 0.3, blue: 0.3, alpha: 1.0)  // 赤
         bulletsLabel.position = CGPoint(x: size.width - 80, y: size.height - 60)
         bulletsLabel.horizontalAlignmentMode = .right
+        bulletsLabel.zPosition = 10
         updateBulletsLabel()
         addChild(bulletsLabel)
     }

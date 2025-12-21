@@ -94,3 +94,6 @@ iOSInjectionProject/
 *.swp
 *~
 .DS_Store
+
+# Claude Code
+.claude/
