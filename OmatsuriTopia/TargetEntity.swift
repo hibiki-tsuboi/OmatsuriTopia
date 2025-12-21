@@ -85,21 +85,21 @@ class TargetEntity: GKEntity {
     static func randomType() -> TargetType {
         let random = Int.random(in: 1...200)
         switch random {
-        case 1:             // 0.5% - 流れ星
+        case 1...10:        // 5% - 流れ星
             return .shootingStar
-        case 2:             // 0.5% - 景品1
+        case 11...12:       // 1% - 景品1
             return .prize1
-        case 3:             // 0.5% - 景品2
+        case 13...14:       // 1% - 景品2
             return .prize2
-        case 4:             // 0.5% - 景品3
+        case 15...16:       // 1% - 景品3
             return .prize3
-        case 5...14:        // 5% - ボーナス
+        case 17...30:       // 7% - ボーナス
             return .bonus
-        case 15...54:       // 20% - 小型
+        case 31...70:       // 20% - 小型
             return .small
-        case 55...114:      // 30% - 中型
+        case 71...130:      // 30% - 中型
             return .medium
-        default:            // 43% - 大型
+        default:            // 35% - 大型
             return .large
         }
     }
