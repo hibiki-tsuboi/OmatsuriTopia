@@ -44,12 +44,77 @@ class GameScene: SKScene {
 
     override func sceneDidLoad() {
         self.lastUpdateTime = 0
-        self.backgroundColor = SKColor(red: 0.15, green: 0.15, blue: 0.3, alpha: 1.0)
+
+        // お祭りっぽい背景（夜空＋提灯の明かりをイメージ）
+        setupFestivalBackground()
 
         setupLanes()
         setupUI()
         setupCrosshair()
         setupFireButton()
+    }
+
+    private func setupFestivalBackground() {
+        // グラデーション背景（夕暮れ〜夜のお祭り）
+        self.backgroundColor = SKColor(red: 0.1, green: 0.05, blue: 0.2, alpha: 1.0)
+
+        // 装飾用の提灯を追加
+        addLanterns()
+
+        // 星を追加
+        addStars()
+    }
+
+    private func addLanterns() {
+        // 上部に提灯風の装飾を配置
+        let lanternCount = 8
+        let spacing = size.width / CGFloat(lanternCount)
+
+        for i in 0..<lanternCount {
+            let lantern = SKShapeNode(circleOfRadius: 15)
+            lantern.fillColor = i % 2 == 0 ? SKColor.systemRed : SKColor.systemYellow
+            lantern.strokeColor = SKColor.systemOrange
+            lantern.lineWidth = 2
+            lantern.position = CGPoint(
+                x: spacing * CGFloat(i) + spacing / 2,
+                y: size.height - 30
+            )
+            lantern.alpha = 0.7
+            lantern.zPosition = -1
+
+            // ゆらゆら揺れるアニメーション
+            let sway = SKAction.sequence([
+                SKAction.moveBy(x: 0, y: -5, duration: 1.0),
+                SKAction.moveBy(x: 0, y: 5, duration: 1.0)
+            ])
+            lantern.run(SKAction.repeatForever(sway))
+
+            addChild(lantern)
+        }
+    }
+
+    private func addStars() {
+        // 背景に星を散りばめる
+        for _ in 0..<30 {
+            let star = SKShapeNode(circleOfRadius: CGFloat.random(in: 1...3))
+            star.fillColor = .white
+            star.strokeColor = .clear
+            star.position = CGPoint(
+                x: CGFloat.random(in: 0...size.width),
+                y: CGFloat.random(in: size.height * 0.5...size.height - 50)
+            )
+            star.alpha = CGFloat.random(in: 0.3...0.8)
+            star.zPosition = -2
+
+            // キラキラ点滅
+            let twinkle = SKAction.sequence([
+                SKAction.fadeAlpha(to: 0.2, duration: Double.random(in: 0.5...1.5)),
+                SKAction.fadeAlpha(to: 0.8, duration: Double.random(in: 0.5...1.5))
+            ])
+            star.run(SKAction.repeatForever(twinkle))
+
+            addChild(star)
+        }
     }
 
     // MARK: - Setup
