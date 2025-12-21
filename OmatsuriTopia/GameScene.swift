@@ -121,11 +121,9 @@ class GameScene: SKScene {
     }
 
     private func setupUI() {
-        // スコア表示用の背景パネル（左上）
-        let scorePanel = SKShapeNode(rect: CGRect(x: 10, y: size.height - 90, width: 180, height: 70), cornerRadius: 15)
-        scorePanel.fillColor = SKColor(white: 0.0, alpha: 0.7)
-        scorePanel.strokeColor = SKColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 1.0)
-        scorePanel.lineWidth = 3
+        // スコア表示用の背景画像（左上）
+        let scorePanel = SKSpriteNode(imageNamed: "ScoreBackground")
+        scorePanel.position = CGPoint(x: 100, y: size.height - 55)
         scorePanel.zPosition = 5
         addChild(scorePanel)
 
