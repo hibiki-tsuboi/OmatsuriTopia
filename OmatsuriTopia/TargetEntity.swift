@@ -77,7 +77,7 @@ class TargetEntity: GKEntity {
             return (CGSize(width: 90, height: 120), 180, 400, "Target010")
         case .shootingStar:
             // 流れ星: 激レア、最高得点、超高速
-            return (CGSize(width: 90, height: 90), 500, 500, "Target011")
+            return (CGSize(width: 90, height: 90), 800, 500, "Target011")
         }
     }
 
