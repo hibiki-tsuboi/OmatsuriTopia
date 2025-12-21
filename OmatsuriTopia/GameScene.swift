@@ -533,7 +533,7 @@ class GameScene: SKScene {
     }
 
     private func updateBulletsLabel() {
-        bulletsLabel.text = "\(gameState.bulletsRemaining)"
+        bulletsLabel.text = "\(gameState.bulletsRemaining)/\(gameState.bulletsTotal)"
     }
 
     // MARK: - Touch Handling
