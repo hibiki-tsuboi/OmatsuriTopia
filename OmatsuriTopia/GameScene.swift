@@ -273,8 +273,9 @@ class GameScene: SKScene {
         let spacing: CGFloat = 20
 
         reloadButton = SKShapeNode(circleOfRadius: buttonSize / 2)
-        reloadButton.fillColor = SKColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 1.0)  // 緑色
-        reloadButton.strokeColor = SKColor(red: 0.1, green: 0.6, blue: 0.1, alpha: 1.0)  // 濃い緑で縁取り
+        // 初期状態は装填済みなのでグレーに設定
+        reloadButton.fillColor = SKColor(white: 0.4, alpha: 1.0)
+        reloadButton.strokeColor = SKColor(white: 0.2, alpha: 1.0)
         reloadButton.lineWidth = 5
         // 発射ボタンの左側に配置
         reloadButton.position = CGPoint(x: size.width - buttonSize / 2 - margin - buttonSize - spacing, y: buttonSize / 2 + margin)
@@ -586,13 +587,13 @@ class GameScene: SKScene {
 
     private func updateReloadButtonState() {
         if gameState.isLoaded {
-            // 装填済み：緑色
-            reloadButton.fillColor = SKColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 1.0)
-            reloadButton.strokeColor = SKColor(red: 0.1, green: 0.6, blue: 0.1, alpha: 1.0)
-        } else {
-            // 未装填：暗いグレー
+            // 装填済み：グレー（リロード不要）
             reloadButton.fillColor = SKColor(white: 0.4, alpha: 1.0)
             reloadButton.strokeColor = SKColor(white: 0.2, alpha: 1.0)
+        } else {
+            // 未装填：緑色（リロードを促す）
+            reloadButton.fillColor = SKColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 1.0)
+            reloadButton.strokeColor = SKColor(red: 0.1, green: 0.6, blue: 0.1, alpha: 1.0)
         }
     }
 
