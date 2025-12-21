@@ -267,66 +267,62 @@ class GameScene: SKScene {
     }
 
     private func setupReloadButton() {
-        // リロードボタン（発射ボタンの左側）- 一般的なゲームUI
-        let buttonWidth: CGFloat = 90
-        let buttonHeight: CGFloat = 90
+        // リロードボタン（発射ボタンの左側）
+        let buttonSize: CGFloat = 100
         let margin: CGFloat = 20
         let spacing: CGFloat = 20
 
-        // 角丸四角形のボタン
-        reloadButton = SKShapeNode(rect: CGRect(x: -buttonWidth/2, y: -buttonHeight/2, width: buttonWidth, height: buttonHeight), cornerRadius: 15)
-        reloadButton.fillColor = SKColor(red: 0.3, green: 0.5, blue: 0.8, alpha: 1.0)  // 青色
-        reloadButton.strokeColor = SKColor(red: 0.2, green: 0.4, blue: 0.7, alpha: 1.0)  // 濃い青で縁取り
-        reloadButton.lineWidth = 4
-        reloadButton.position = CGPoint(x: size.width - buttonWidth/2 - margin - 100 - spacing, y: buttonHeight/2 + margin)
+        reloadButton = SKShapeNode(circleOfRadius: buttonSize / 2)
+        reloadButton.fillColor = SKColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 1.0)  // 緑色
+        reloadButton.strokeColor = SKColor(red: 0.1, green: 0.6, blue: 0.1, alpha: 1.0)  // 濃い緑で縁取り
+        reloadButton.lineWidth = 5
+        // 発射ボタンの左側に配置
+        reloadButton.position = CGPoint(x: size.width - buttonSize / 2 - margin - buttonSize - spacing, y: buttonSize / 2 + margin)
         reloadButton.zPosition = 100
         reloadButton.name = "reloadButton"
         addChild(reloadButton)
 
-        // リロードアイコン（回転矢印）を追加
-        let reloadIcon = createReloadIcon(size: 50)
+        // リロードアイコン（ブラウザのリロードのような円形矢印）を追加
+        let reloadIcon = createReloadIcon(size: 55)
         reloadIcon.position = CGPoint(x: 0, y: 0)
         reloadButton.addChild(reloadIcon)
     }
 
     private func createReloadIcon(size: CGFloat) -> SKNode {
         let container = SKNode()
-
-        // 円形の矢印を描く（時計回り、270度）
+        let radius = size / 2.2
+        
+        // 円弧を描く (真上に明確な隙間を作る)
         let path = CGMutablePath()
-        let radius = size / 2.8
-        let startAngle: CGFloat = CGFloat.pi * 0.75  // 左上から開始
-        let endAngle: CGFloat = startAngle - CGFloat.pi * 1.5  // 270度回転
-
-        path.addArc(center: .zero, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: false)
-
+        let startAngle: CGFloat = CGFloat.pi * 0.25 // 尻尾の開始位置 (より右側に移動)
+        let endAngle: CGFloat = CGFloat.pi * 0.5    // 先端の位置 (真上)
+        
+        // 時計回り(clockwise: true)で描画し、真上に隙間を確保
+        path.addArc(center: .zero, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: true)
+        
         let arc = SKShapeNode(path: path)
         arc.strokeColor = .white
-        arc.lineWidth = 4
+        arc.lineWidth = 9
         arc.lineCap = .round
         container.addChild(arc)
-
-        // 矢印の先端（三角形）を終点に配置
-        let arrowX = radius * cos(endAngle)
-        let arrowY = radius * sin(endAngle)
-
-        // 矢印の向き（反時計回りの接線方向）
-        let arrowSize: CGFloat = 8
-
+        
+        // 矢印の先端 (真上に配置)
+        let arrowSize = size / 3.5
+        let tipX: CGFloat = 0
+        let tipY: CGFloat = radius
+        
         let arrowPath = CGMutablePath()
-        // 矢印の先端
-        arrowPath.move(to: CGPoint(x: arrowX + arrowSize * 1.2, y: arrowY))
-        // 左上
-        arrowPath.addLine(to: CGPoint(x: arrowX - arrowSize * 0.3, y: arrowY + arrowSize))
-        // 左下
-        arrowPath.addLine(to: CGPoint(x: arrowX - arrowSize * 0.3, y: arrowY - arrowSize))
+        // 右向きの矢印
+        arrowPath.move(to: CGPoint(x: tipX - arrowSize * 0.3, y: tipY + arrowSize * 0.5)) // 左上
+        arrowPath.addLine(to: CGPoint(x: tipX + arrowSize * 0.7, y: tipY))               // 右（先端）
+        arrowPath.addLine(to: CGPoint(x: tipX - arrowSize * 0.3, y: tipY - arrowSize * 0.5)) // 左下
         arrowPath.closeSubpath()
-
+        
         let arrowHead = SKShapeNode(path: arrowPath)
         arrowHead.fillColor = .white
         arrowHead.strokeColor = .clear
         container.addChild(arrowHead)
-
+        
         return container
     }
 
@@ -577,10 +573,11 @@ class GameScene: SKScene {
     private func reload() {
         guard gameState.isGameActive, !gameState.isLoaded else { return }
 
-        // リロードアニメーション
-        let icon = reloadButton.children.first
-        let rotate = SKAction.rotate(byAngle: CGFloat.pi * 2, duration: 0.3)
-        icon?.run(rotate)
+        // リロードアニメーション（アイコンを回転させる）
+        if let icon = reloadButton.children.first {
+            let rotate = SKAction.rotate(byAngle: -CGFloat.pi * 2, duration: 0.4)
+            icon.run(rotate)
+        }
 
         // 装填状態にする
         gameState.isLoaded = true
@@ -589,9 +586,9 @@ class GameScene: SKScene {
 
     private func updateReloadButtonState() {
         if gameState.isLoaded {
-            // 装填済み：青色
-            reloadButton.fillColor = SKColor(red: 0.3, green: 0.5, blue: 0.8, alpha: 1.0)
-            reloadButton.strokeColor = SKColor(red: 0.2, green: 0.4, blue: 0.7, alpha: 1.0)
+            // 装填済み：緑色
+            reloadButton.fillColor = SKColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 1.0)
+            reloadButton.strokeColor = SKColor(red: 0.1, green: 0.6, blue: 0.1, alpha: 1.0)
         } else {
             // 未装填：暗いグレー
             reloadButton.fillColor = SKColor(white: 0.4, alpha: 1.0)
