@@ -345,7 +345,11 @@ class GameScene: SKScene {
 
         if let target = hitTarget {
             // 命中！
-            if let scoreComponent = target.component(ofType: ScoreComponent.self) {
+            if let scoreComponent = target.component(ofType: ScoreComponent.self),
+               let spriteComponent = target.component(ofType: SpriteComponent.self) {
+                // 獲得した点数を的の位置に表示
+                showPointsLabel(points: scoreComponent.points, at: spriteComponent.node.position)
+
                 gameState.score += scoreComponent.points
                 gameState.targetsDestroyed += 1
                 updateScoreLabel()
@@ -618,5 +622,53 @@ class GameScene: SKScene {
         }
 
         self.lastUpdateTime = currentTime
+    }
+
+    // MARK: - Visual Effects
+
+    /// 的を射った時に獲得した点数を表示
+    private func showPointsLabel(points: Int, at position: CGPoint) {
+        let pointsLabel = SKLabelNode(fontNamed: "HelveticaNeue-Bold")
+        pointsLabel.text = "+\(points)"
+        pointsLabel.fontSize = 40
+        pointsLabel.position = position
+        pointsLabel.zPosition = 100
+
+        // 点数に応じて色を変える
+        if points >= 100 {
+            // 高得点（100点以上）: 金色
+            pointsLabel.fontColor = SKColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 1.0)
+        } else if points >= 50 {
+            // 中得点（50点以上）: オレンジ
+            pointsLabel.fontColor = SKColor.orange
+        } else {
+            // 低得点（50点未満）: 白
+            pointsLabel.fontColor = SKColor.white
+        }
+
+        // 影をつける
+        let shadow = SKLabelNode(fontNamed: "HelveticaNeue-Bold")
+        shadow.text = pointsLabel.text
+        shadow.fontSize = pointsLabel.fontSize
+        shadow.fontColor = SKColor.black
+        shadow.alpha = 0.5
+        shadow.position = CGPoint(x: 2, y: -2)
+        shadow.zPosition = -1
+        pointsLabel.addChild(shadow)
+
+        addChild(pointsLabel)
+
+        // アニメーション: 上に移動しながらフェードアウト
+        let moveUp = SKAction.moveBy(x: 0, y: 80, duration: 1.0)
+        let fadeOut = SKAction.fadeOut(withDuration: 1.0)
+        let scaleUp = SKAction.scale(to: 1.3, duration: 0.3)
+        let scaleDown = SKAction.scale(to: 1.0, duration: 0.7)
+
+        let scaleSequence = SKAction.sequence([scaleUp, scaleDown])
+        let group = SKAction.group([moveUp, fadeOut, scaleSequence])
+
+        pointsLabel.run(group) {
+            pointsLabel.removeFromParent()
+        }
     }
 }
