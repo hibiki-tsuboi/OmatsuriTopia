@@ -22,10 +22,11 @@ class TargetEntity: GKEntity {
     init(type: TargetType, position: CGPoint, bounds: CGRect) {
         super.init()
 
-        let (size, color, speed, points) = TargetEntity.attributes(for: type)
+        let (size, speed, points, imageName) = TargetEntity.attributes(for: type)
 
-        // コンポーネントを追加
-        let spriteComponent = SpriteComponent(texture: nil, color: color, size: size)
+        // 的の画像を使用
+        let texture = SKTexture(imageNamed: imageName)
+        let spriteComponent = SpriteComponent(texture: texture, color: .clear, size: size)
         spriteComponent.node.position = position
         addComponent(spriteComponent)
 
@@ -45,17 +46,22 @@ class TargetEntity: GKEntity {
     // MARK: - Factory Methods
 
     /// 的の種類ごとの属性を返す
-    /// - Returns: (サイズ, 色, 速度, 得点)
-    private static func attributes(for type: TargetType) -> (CGSize, SKColor, CGFloat, Int) {
+    /// - Returns: (サイズ, 速度, 得点, 画像名)
+    private static func attributes(for type: TargetType) -> (CGSize, CGFloat, Int, String) {
+        // 各的タイプに異なる画像を割り当て
         switch type {
         case .small:
-            return (CGSize(width: 40, height: 40), .systemRed, 150, 100)
+            // 小型: 速い、高得点
+            return (CGSize(width: 50, height: 67), 150, 100, "Target002")
         case .medium:
-            return (CGSize(width: 70, height: 70), .systemYellow, 100, 50)
+            // 中型: 中速、中得点
+            return (CGSize(width: 80, height: 107), 100, 50, "Target003")
         case .large:
-            return (CGSize(width: 100, height: 100), .systemGreen, 60, 20)
+            // 大型: 遅い、低得点
+            return (CGSize(width: 110, height: 148), 60, 20, "Target004")
         case .bonus:
-            return (CGSize(width: 50, height: 50), .systemOrange, 120, 200)
+            // ボーナス: レア、高得点
+            return (CGSize(width: 70, height: 94), 120, 200, "Target005")
         }
     }
 
