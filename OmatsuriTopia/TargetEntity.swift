@@ -14,6 +14,9 @@ enum TargetType {
     case medium  // 中型: 中速、中得点
     case large   // 大型: 遅い、低得点
     case bonus   // ボーナス: レア、高得点
+    case prize1  // 景品1: 超レア、超高得点
+    case prize2  // 景品2: 超レア、超高得点
+    case prize3  // 景品3: 超レア、超高得点
 }
 
 // MARK: - TargetEntity
@@ -62,6 +65,15 @@ class TargetEntity: GKEntity {
         case .bonus:
             // ボーナス: レア、高得点
             return (CGSize(width: 70, height: 94), 240, 200, "Target005")
+        case .prize1:
+            // 景品1: 超レア、超高得点
+            return (CGSize(width: 90, height: 120), 180, 300, "Target008")
+        case .prize2:
+            // 景品2: 超レア、超高得点
+            return (CGSize(width: 90, height: 120), 180, 350, "Target009")
+        case .prize3:
+            // 景品3: 超レア、超高得点
+            return (CGSize(width: 90, height: 120), 180, 400, "Target010")
         }
     }
 
@@ -69,13 +81,19 @@ class TargetEntity: GKEntity {
     static func randomType() -> TargetType {
         let random = Int.random(in: 1...100)
         switch random {
-        case 1...10:        // 10%
+        case 1:             // 1% - 景品1
+            return .prize1
+        case 2:             // 1% - 景品2
+            return .prize2
+        case 3:             // 1% - 景品3
+            return .prize3
+        case 4...10:        // 7% - ボーナス
             return .bonus
-        case 11...30:       // 20%
+        case 11...30:       // 20% - 小型
             return .small
-        case 31...60:       // 30%
+        case 31...60:       // 30% - 中型
             return .medium
-        default:            // 40%
+        default:            // 40% - 大型
             return .large
         }
     }
