@@ -15,6 +15,7 @@ class GameState {
     var bulletsTotal: Int = 10
     var isGameActive: Bool = true
     var targetsDestroyed: Int = 0
+    var isLoaded: Bool = true  // 弾が装填されているか
 }
 
 class GameScene: SKScene {
@@ -34,6 +35,7 @@ class GameScene: SKScene {
     private var bulletsIcon: SKNode!
     private var crosshair: SKShapeNode!
     private var fireButton: SKShapeNode!
+    private var reloadButton: SKShapeNode!
     private var gameOverPanel: SKNode?
 
     // 的のスポーンレーン（Y座標）
@@ -53,6 +55,7 @@ class GameScene: SKScene {
         setupUI()
         setupCrosshair()
         setupFireButton()
+        setupReloadButton()
     }
 
     private func setupFestivalBackground() {
@@ -263,6 +266,62 @@ class GameScene: SKScene {
         fireButton.addChild(targetIcon)
     }
 
+    private func setupReloadButton() {
+        // リロードボタン（発射ボタンの左側）
+        let buttonSize: CGFloat = 100
+        let margin: CGFloat = 20
+        let spacing: CGFloat = 20
+
+        reloadButton = SKShapeNode(circleOfRadius: buttonSize / 2)
+        reloadButton.fillColor = SKColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 1.0)  // 緑色
+        reloadButton.strokeColor = SKColor(red: 0.0, green: 0.6, blue: 0.0, alpha: 1.0)  // 濃い緑で縁取り
+        reloadButton.lineWidth = 5
+        reloadButton.position = CGPoint(x: size.width - buttonSize / 2 - margin - buttonSize - spacing, y: buttonSize / 2 + margin)
+        reloadButton.zPosition = 100
+        reloadButton.name = "reloadButton"
+        addChild(reloadButton)
+
+        // リロードアイコン（回転矢印）を追加
+        let reloadIcon = createReloadIcon(size: 60)
+        reloadIcon.position = CGPoint(x: 0, y: 0)
+        reloadButton.addChild(reloadIcon)
+    }
+
+    private func createReloadIcon(size: CGFloat) -> SKNode {
+        let container = SKNode()
+
+        // 円形の矢印を描く
+        let path = CGMutablePath()
+        let radius = size / 2.5
+        let startAngle = CGFloat.pi * 0.2
+        let endAngle = CGFloat.pi * 1.8
+
+        path.addArc(center: .zero, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: false)
+
+        let arc = SKShapeNode(path: path)
+        arc.strokeColor = .white
+        arc.lineWidth = 6
+        arc.lineCap = .round
+        container.addChild(arc)
+
+        // 矢印の先端
+        let arrowPath = CGMutablePath()
+        let arrowX = radius * cos(endAngle)
+        let arrowY = radius * sin(endAngle)
+        arrowPath.move(to: CGPoint(x: arrowX, y: arrowY))
+        arrowPath.addLine(to: CGPoint(x: arrowX - 15, y: arrowY - 15))
+        arrowPath.move(to: CGPoint(x: arrowX, y: arrowY))
+        arrowPath.addLine(to: CGPoint(x: arrowX + 10, y: arrowY - 12))
+
+        let arrowHead = SKShapeNode(path: arrowPath)
+        arrowHead.strokeColor = .white
+        arrowHead.lineWidth = 6
+        arrowHead.lineCap = .round
+        container.addChild(arrowHead)
+
+        return container
+    }
+
     private func createTargetIcon(size: CGFloat) -> SKNode {
         let container = SKNode()
 
@@ -323,11 +382,15 @@ class GameScene: SKScene {
     }
 
     private func fire() {
-        guard gameState.isGameActive, gameState.bulletsRemaining > 0 else { return }
+        guard gameState.isGameActive, gameState.bulletsRemaining > 0, gameState.isLoaded else { return }
 
         // 弾数を減らす
         gameState.bulletsRemaining -= 1
         updateBulletsLabel()
+
+        // 装填状態を解除
+        gameState.isLoaded = false
+        updateReloadButtonState()
 
         // 照準器の位置で当たり判定
         let crosshairPos = crosshair.position
@@ -503,6 +566,31 @@ class GameScene: SKScene {
         return container
     }
 
+    private func reload() {
+        guard gameState.isGameActive, !gameState.isLoaded else { return }
+
+        // リロードアニメーション
+        let icon = reloadButton.children.first
+        let rotate = SKAction.rotate(byAngle: CGFloat.pi * 2, duration: 0.3)
+        icon?.run(rotate)
+
+        // 装填状態にする
+        gameState.isLoaded = true
+        updateReloadButtonState()
+    }
+
+    private func updateReloadButtonState() {
+        if gameState.isLoaded {
+            // 装填済み：緑色
+            reloadButton.fillColor = SKColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 1.0)
+            reloadButton.strokeColor = SKColor(red: 0.0, green: 0.6, blue: 0.0, alpha: 1.0)
+        } else {
+            // 未装填：グレー
+            reloadButton.fillColor = SKColor(white: 0.5, alpha: 1.0)
+            reloadButton.strokeColor = SKColor(white: 0.3, alpha: 1.0)
+        }
+    }
+
     private func restartGame() {
         // ゲームオーバーパネルを削除
         gameOverPanel?.removeFromParent()
@@ -521,11 +609,13 @@ class GameScene: SKScene {
         gameState.bulletsRemaining = gameState.bulletsTotal
         gameState.isGameActive = true
         gameState.targetsDestroyed = 0
+        gameState.isLoaded = true
         spawnTimer = 0
 
         // UIを更新
         updateScoreLabel()
         updateBulletsLabel()
+        updateReloadButtonState()
 
         // 照準器を中央に戻す
         crosshair.position = CGPoint(x: size.width / 2, y: size.height / 2)
@@ -551,6 +641,12 @@ class GameScene: SKScene {
             return
         }
 
+        // リロードボタンをチェック
+        if reloadButton.contains(location) {
+            reload()
+            return
+        }
+
         // リスタートボタンをチェック
         if let panel = gameOverPanel {
             let locationInPanel = touch.location(in: panel)
@@ -569,8 +665,8 @@ class GameScene: SKScene {
         guard let touch = touches.first else { return }
         let location = touch.location(in: self)
 
-        // ゲーム中で、発射ボタンやゲームオーバーパネル以外ならスコープを移動
-        if gameState.isGameActive && !fireButton.contains(location) {
+        // ゲーム中で、発射ボタンやリロードボタン以外ならスコープを移動
+        if gameState.isGameActive && !fireButton.contains(location) && !reloadButton.contains(location) {
             moveCrosshairDirect(to: location)
         }
     }
