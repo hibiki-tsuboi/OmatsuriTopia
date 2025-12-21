@@ -292,44 +292,39 @@ class GameScene: SKScene {
     private func createReloadIcon(size: CGFloat) -> SKNode {
         let container = SKNode()
 
-        // 円形の矢印を描く（時計回り）
+        // 円形の矢印を描く（時計回り、270度）
         let path = CGMutablePath()
-        let radius = size / 2.5
-        let startAngle = -CGFloat.pi * 0.7  // 左下から開始
-        let endAngle = CGFloat.pi * 0.5     // 右上で終了
+        let radius = size / 2.8
+        let startAngle: CGFloat = CGFloat.pi * 0.75  // 左上から開始
+        let endAngle: CGFloat = startAngle - CGFloat.pi * 1.5  // 270度回転
 
-        path.addArc(center: .zero, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: true)
+        path.addArc(center: .zero, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: false)
 
         let arc = SKShapeNode(path: path)
         arc.strokeColor = .white
-        arc.lineWidth = 6
+        arc.lineWidth = 4
         arc.lineCap = .round
         container.addChild(arc)
 
-        // 矢印の先端（三角形）
+        // 矢印の先端（三角形）を終点に配置
         let arrowX = radius * cos(endAngle)
         let arrowY = radius * sin(endAngle)
 
-        // 矢印の向きを接線方向に
-        let tangentAngle = endAngle + CGFloat.pi / 2
-        let arrowSize: CGFloat = 12
+        // 矢印の向き（反時計回りの接線方向）
+        let arrowSize: CGFloat = 8
 
         let arrowPath = CGMutablePath()
-        arrowPath.move(to: CGPoint(x: arrowX, y: arrowY))
-        arrowPath.addLine(to: CGPoint(
-            x: arrowX + arrowSize * cos(tangentAngle + CGFloat.pi * 0.75),
-            y: arrowY + arrowSize * sin(tangentAngle + CGFloat.pi * 0.75)
-        ))
-        arrowPath.addLine(to: CGPoint(
-            x: arrowX + arrowSize * cos(tangentAngle - CGFloat.pi * 0.75),
-            y: arrowY + arrowSize * sin(tangentAngle - CGFloat.pi * 0.75)
-        ))
+        // 矢印の先端
+        arrowPath.move(to: CGPoint(x: arrowX + arrowSize * 1.2, y: arrowY))
+        // 左上
+        arrowPath.addLine(to: CGPoint(x: arrowX - arrowSize * 0.3, y: arrowY + arrowSize))
+        // 左下
+        arrowPath.addLine(to: CGPoint(x: arrowX - arrowSize * 0.3, y: arrowY - arrowSize))
         arrowPath.closeSubpath()
 
         let arrowHead = SKShapeNode(path: arrowPath)
         arrowHead.fillColor = .white
-        arrowHead.strokeColor = .white
-        arrowHead.lineWidth = 2
+        arrowHead.strokeColor = .clear
         container.addChild(arrowHead)
 
         return container
