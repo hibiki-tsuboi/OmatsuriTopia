@@ -142,7 +142,7 @@ class GameScene: SKScene {
         addChild(scoreLabel)
 
         // 弾数表示用の背景パネル（右上）
-        let bulletsPanel = SKShapeNode(rect: CGRect(x: size.width - 160, y: size.height - 90, width: 150, height: 70), cornerRadius: 15)
+        let bulletsPanel = SKShapeNode(rect: CGRect(x: size.width - 200, y: size.height - 90, width: 190, height: 70), cornerRadius: 15)
         bulletsPanel.fillColor = SKColor(white: 0.0, alpha: 0.7)
         bulletsPanel.strokeColor = SKColor(red: 1.0, green: 0.3, blue: 0.3, alpha: 1.0)
         bulletsPanel.lineWidth = 3
