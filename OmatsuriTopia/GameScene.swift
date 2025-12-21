@@ -56,14 +56,21 @@ class GameScene: SKScene {
     }
 
     private func setupFestivalBackground() {
-        // 明るい縁日の背景（青空）
-        self.backgroundColor = SKColor(red: 0.53, green: 0.81, blue: 0.92, alpha: 1.0)
+        // 背景画像を設定
+        let background = SKSpriteNode(imageNamed: "Background")
+        background.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        background.zPosition = -10
+
+        // 画面サイズに合わせて拡大縮小
+        let scaleX = size.width / background.size.width
+        let scaleY = size.height / background.size.height
+        let scale = max(scaleX, scaleY)
+        background.setScale(scale)
+
+        addChild(background)
 
         // 装飾用の提灯を追加
         addLanterns()
-
-        // 雲を追加
-        addClouds()
     }
 
     private func addLanterns() {
@@ -94,31 +101,6 @@ class GameScene: SKScene {
         }
     }
 
-    private func addClouds() {
-        // 背景に雲を追加
-        for _ in 0..<8 {
-            let cloud = SKShapeNode(ellipseOf: CGSize(
-                width: CGFloat.random(in: 80...150),
-                height: CGFloat.random(in: 40...60)
-            ))
-            cloud.fillColor = .white
-            cloud.strokeColor = .clear
-            cloud.position = CGPoint(
-                x: CGFloat.random(in: 0...size.width),
-                y: CGFloat.random(in: size.height * 0.6...size.height - 50)
-            )
-            cloud.alpha = 0.7
-            cloud.zPosition = -2
-
-            // ゆっくり流れる
-            let drift = SKAction.moveBy(x: size.width + 200, y: 0, duration: Double.random(in: 60...90))
-            let reset = SKAction.moveBy(x: -(size.width + 400), y: 0, duration: 0)
-            let sequence = SKAction.sequence([drift, reset])
-            cloud.run(SKAction.repeatForever(sequence))
-
-            addChild(cloud)
-        }
-    }
 
     // MARK: - Setup
 
