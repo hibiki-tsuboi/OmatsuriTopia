@@ -52,16 +52,16 @@ class TargetEntity: GKEntity {
         switch type {
         case .small:
             // 小型: 速い、高得点
-            return (CGSize(width: 50, height: 67), 150, 100, "Target002")
+            return (CGSize(width: 50, height: 67), 300, 100, "Target002")
         case .medium:
             // 中型: 中速、中得点
-            return (CGSize(width: 80, height: 107), 100, 50, "Target003")
+            return (CGSize(width: 80, height: 107), 200, 50, "Target003")
         case .large:
             // 大型: 遅い、低得点
-            return (CGSize(width: 110, height: 148), 60, 20, "Target004")
+            return (CGSize(width: 110, height: 148), 120, 20, "Target004")
         case .bonus:
             // ボーナス: レア、高得点
-            return (CGSize(width: 70, height: 94), 120, 200, "Target005")
+            return (CGSize(width: 70, height: 94), 240, 200, "Target005")
         }
     }
 

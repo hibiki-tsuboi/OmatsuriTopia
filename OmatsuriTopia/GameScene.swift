@@ -41,7 +41,7 @@ class GameScene: SKScene {
 
     // スポーンタイマー
     private var spawnTimer: TimeInterval = 0
-    private let spawnInterval: TimeInterval = 2.0
+    private let spawnInterval: TimeInterval = 1.0
 
     override func sceneDidLoad() {
         self.lastUpdateTime = 0
@@ -307,14 +307,19 @@ class GameScene: SKScene {
         guard gameState.isGameActive else { return }
 
         let bounds = CGRect(x: 0, y: 0, width: size.width, height: size.height)
-        let target = TargetEntity.createRandom(in: bounds, lanes: lanes)
 
-        // シーンにスプライトを追加
-        if let spriteComponent = target.component(ofType: SpriteComponent.self) {
-            addChild(spriteComponent.node)
+        // 一度に2-3個の的をランダムに生成
+        let targetCount = Int.random(in: 2...3)
+        for _ in 0..<targetCount {
+            let target = TargetEntity.createRandom(in: bounds, lanes: lanes)
+
+            // シーンにスプライトを追加
+            if let spriteComponent = target.component(ofType: SpriteComponent.self) {
+                addChild(spriteComponent.node)
+            }
+
+            entities.append(target)
         }
-
-        entities.append(target)
     }
 
     private func fire() {
