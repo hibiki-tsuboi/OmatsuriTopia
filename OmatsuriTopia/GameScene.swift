@@ -29,10 +29,11 @@ class GameScene: SKScene {
 
     // UI要素
     private var scoreLabel: SKLabelNode!
+    private var scoreIcon: SKShapeNode!
     private var bulletsLabel: SKLabelNode!
+    private var bulletsIcon: SKNode!
     private var crosshair: SKShapeNode!
     private var fireButton: SKShapeNode!
-    private var fireButtonLabel: SKLabelNode!
     private var gameOverPanel: SKNode?
 
     // 的のスポーンレーン（Y座標）
@@ -135,23 +136,78 @@ class GameScene: SKScene {
     }
 
     private func setupUI() {
-        // スコアラベル（左上）
+        // スコアアイコン（星）+ 数字（左上）
+        scoreIcon = createStarIcon()
+        scoreIcon.position = CGPoint(x: 30, y: size.height - 50)
+        addChild(scoreIcon)
+
         scoreLabel = SKLabelNode(fontNamed: "Arial-BoldMT")
-        scoreLabel.fontSize = 32
-        scoreLabel.fontColor = .white
-        scoreLabel.position = CGPoint(x: 100, y: size.height - 60)
+        scoreLabel.fontSize = 40
+        scoreLabel.fontColor = SKColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 1.0)  // ゴールド
+        scoreLabel.position = CGPoint(x: 70, y: size.height - 60)
         scoreLabel.horizontalAlignmentMode = .left
         updateScoreLabel()
         addChild(scoreLabel)
 
-        // 弾数ラベル（右上）
+        // 弾丸アイコン + 数字（右上）
+        bulletsIcon = createBulletIcons()
+        bulletsIcon.position = CGPoint(x: size.width - 30, y: size.height - 50)
+        addChild(bulletsIcon)
+
         bulletsLabel = SKLabelNode(fontNamed: "Arial-BoldMT")
-        bulletsLabel.fontSize = 32
-        bulletsLabel.fontColor = .white
-        bulletsLabel.position = CGPoint(x: size.width - 100, y: size.height - 60)
+        bulletsLabel.fontSize = 40
+        bulletsLabel.fontColor = SKColor(red: 1.0, green: 0.3, blue: 0.3, alpha: 1.0)  // 赤
+        bulletsLabel.position = CGPoint(x: size.width - 80, y: size.height - 60)
         bulletsLabel.horizontalAlignmentMode = .right
         updateBulletsLabel()
         addChild(bulletsLabel)
+    }
+
+    private func createStarIcon() -> SKShapeNode {
+        // 星型のアイコン
+        let path = CGMutablePath()
+        let points: [(CGFloat, CGFloat)] = [
+            (0, 15),      // 上
+            (4, 5),       // 右上内側
+            (14, 5),      // 右上
+            (7, -2),      // 右内側
+            (10, -12),    // 右下
+            (0, -6),      // 下内側
+            (-10, -12),   // 左下
+            (-7, -2),     // 左内側
+            (-14, 5),     // 左上
+            (-4, 5)       // 左上内側
+        ]
+
+        path.move(to: CGPoint(x: points[0].0, y: points[0].1))
+        for i in 1..<points.count {
+            path.addLine(to: CGPoint(x: points[i].0, y: points[i].1))
+        }
+        path.closeSubpath()
+
+        let star = SKShapeNode(path: path)
+        star.fillColor = SKColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 1.0)  // ゴールド
+        star.strokeColor = SKColor(red: 1.0, green: 0.65, blue: 0.0, alpha: 1.0)
+        star.lineWidth = 2
+        star.zPosition = 10
+
+        return star
+    }
+
+    private func createBulletIcons() -> SKNode {
+        // 弾丸のアイコン（3つ横並び）
+        let container = SKNode()
+
+        for i in 0..<3 {
+            let bullet = SKShapeNode(ellipseOf: CGSize(width: 8, height: 20))
+            bullet.fillColor = SKColor(red: 0.6, green: 0.4, blue: 0.2, alpha: 1.0)  // 茶色
+            bullet.strokeColor = SKColor(red: 0.4, green: 0.2, blue: 0.0, alpha: 1.0)
+            bullet.lineWidth = 1.5
+            bullet.position = CGPoint(x: -CGFloat(i) * 12, y: 0)
+            container.addChild(bullet)
+        }
+
+        return container
     }
 
     private func setupCrosshair() {
@@ -186,28 +242,61 @@ class GameScene: SKScene {
     }
 
     private func setupFireButton() {
-        // 発射ボタン（右下、より大きく目立つように）
-        let buttonWidth: CGFloat = 120
-        let buttonHeight: CGFloat = 100
+        // 発射ボタン（右下、ターゲットマークのアイコン）
+        let buttonSize: CGFloat = 100
         let margin: CGFloat = 20
 
-        fireButton = SKShapeNode(rect: CGRect(x: 0, y: 0, width: buttonWidth, height: buttonHeight), cornerRadius: 15)
+        fireButton = SKShapeNode(circleOfRadius: buttonSize / 2)
         fireButton.fillColor = SKColor(red: 1.0, green: 0.2, blue: 0.2, alpha: 1.0)  // 明るい赤
         fireButton.strokeColor = SKColor(red: 0.8, green: 0.0, blue: 0.0, alpha: 1.0)  // 濃い赤で縁取り
-        fireButton.lineWidth = 4
-        fireButton.position = CGPoint(x: size.width - buttonWidth - margin, y: margin)
+        fireButton.lineWidth = 5
+        fireButton.position = CGPoint(x: size.width - buttonSize / 2 - margin, y: buttonSize / 2 + margin)
         fireButton.zPosition = 100
         fireButton.name = "fireButton"
         addChild(fireButton)
 
-        fireButtonLabel = SKLabelNode(fontNamed: "Arial-BoldMT")
-        fireButtonLabel.text = "FIRE"
-        fireButtonLabel.fontSize = 32
-        fireButtonLabel.fontColor = .white
-        fireButtonLabel.position = CGPoint(x: buttonWidth / 2, y: buttonHeight / 2 - 5)
-        fireButtonLabel.verticalAlignmentMode = .center
-        fireButtonLabel.horizontalAlignmentMode = .center
-        fireButton.addChild(fireButtonLabel)
+        // ターゲットマークを追加
+        let targetIcon = createTargetIcon(size: 60)
+        targetIcon.position = CGPoint(x: 0, y: 0)
+        fireButton.addChild(targetIcon)
+    }
+
+    private func createTargetIcon(size: CGFloat) -> SKNode {
+        let container = SKNode()
+
+        // 外側の円
+        let outerCircle = SKShapeNode(circleOfRadius: size / 2)
+        outerCircle.strokeColor = .white
+        outerCircle.lineWidth = 4
+        outerCircle.fillColor = .clear
+        container.addChild(outerCircle)
+
+        // 中間の円
+        let middleCircle = SKShapeNode(circleOfRadius: size / 3)
+        middleCircle.strokeColor = .white
+        middleCircle.lineWidth = 3
+        middleCircle.fillColor = .clear
+        container.addChild(middleCircle)
+
+        // 中心の円
+        let innerCircle = SKShapeNode(circleOfRadius: size / 6)
+        innerCircle.fillColor = .white
+        innerCircle.strokeColor = .white
+        innerCircle.lineWidth = 2
+        container.addChild(innerCircle)
+
+        // 十字線
+        let horizontalLine = SKShapeNode(rect: CGRect(x: -size / 2, y: -2, width: size, height: 4))
+        horizontalLine.fillColor = .white
+        horizontalLine.strokeColor = .clear
+        container.addChild(horizontalLine)
+
+        let verticalLine = SKShapeNode(rect: CGRect(x: -2, y: -size / 2, width: 4, height: size))
+        verticalLine.fillColor = .white
+        verticalLine.strokeColor = .clear
+        container.addChild(verticalLine)
+
+        return container
     }
 
     // MARK: - Game Logic
@@ -301,65 +390,103 @@ class GameScene: SKScene {
         gameState.isGameActive = false
 
         // ゲームオーバーパネルを表示
-        let panel = SKShapeNode(rect: CGRect(x: 0, y: 0, width: 400, height: 300), cornerRadius: 20)
-        panel.fillColor = SKColor(white: 0.2, alpha: 0.95)
-        panel.strokeColor = .white
-        panel.lineWidth = 3
-        panel.position = CGPoint(x: size.width / 2 - 200, y: size.height / 2 - 150)
+        let panel = SKShapeNode(rect: CGRect(x: 0, y: 0, width: 500, height: 350), cornerRadius: 30)
+        panel.fillColor = SKColor(red: 0.15, green: 0.15, blue: 0.2, alpha: 0.95)
+        panel.strokeColor = SKColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 1.0)
+        panel.lineWidth = 5
+        panel.position = CGPoint(x: size.width / 2 - 250, y: size.height / 2 - 175)
         panel.zPosition = 200
 
-        let titleLabel = SKLabelNode(fontNamed: "Arial-BoldMT")
-        titleLabel.text = "GAME OVER"
-        titleLabel.fontSize = 40
-        titleLabel.fontColor = .white
-        titleLabel.position = CGPoint(x: 200, y: 220)
-        titleLabel.horizontalAlignmentMode = .center
-        panel.addChild(titleLabel)
+        // 大きな星アイコン（タイトル代わり）
+        let bigStar = createStarIcon()
+        bigStar.setScale(3.0)
+        bigStar.position = CGPoint(x: 250, y: 270)
+        panel.addChild(bigStar)
 
-        let scoreText = SKLabelNode(fontNamed: "Arial")
-        scoreText.text = "Score: \(gameState.score)"
-        scoreText.fontSize = 32
-        scoreText.fontColor = .white
-        scoreText.position = CGPoint(x: 200, y: 160)
-        scoreText.horizontalAlignmentMode = .center
-        panel.addChild(scoreText)
+        // スコアアイコン + 数字
+        let scoreIcon = createStarIcon()
+        scoreIcon.position = CGPoint(x: 150, y: 190)
+        panel.addChild(scoreIcon)
 
-        let hitsText = SKLabelNode(fontNamed: "Arial")
-        hitsText.text = "Hits: \(gameState.targetsDestroyed) / \(gameState.bulletsTotal)"
-        hitsText.fontSize = 24
-        hitsText.fontColor = .white
-        hitsText.position = CGPoint(x: 200, y: 120)
-        hitsText.horizontalAlignmentMode = .center
-        panel.addChild(hitsText)
+        let scoreNum = SKLabelNode(fontNamed: "Arial-BoldMT")
+        scoreNum.text = "\(gameState.score)"
+        scoreNum.fontSize = 50
+        scoreNum.fontColor = SKColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 1.0)
+        scoreNum.position = CGPoint(x: 250, y: 175)
+        scoreNum.horizontalAlignmentMode = .center
+        panel.addChild(scoreNum)
 
+        // 的中アイコン + 数字
+        let targetHitIcon = createTargetIcon(size: 30)
+        targetHitIcon.position = CGPoint(x: 150, y: 120)
+        panel.addChild(targetHitIcon)
+
+        let hitsNum = SKLabelNode(fontNamed: "Arial-BoldMT")
+        hitsNum.text = "\(gameState.targetsDestroyed) / \(gameState.bulletsTotal)"
+        hitsNum.fontSize = 40
+        hitsNum.fontColor = .white
+        hitsNum.position = CGPoint(x: 280, y: 105)
+        hitsNum.horizontalAlignmentMode = .center
+        panel.addChild(hitsNum)
+
+        // 命中率
         let accuracyPercent = gameState.bulletsTotal > 0 ?
             Int((Double(gameState.targetsDestroyed) / Double(gameState.bulletsTotal)) * 100) : 0
-        let accuracyText = SKLabelNode(fontNamed: "Arial")
-        accuracyText.text = "Accuracy: \(accuracyPercent)%"
-        accuracyText.fontSize = 24
-        accuracyText.fontColor = .white
-        accuracyText.position = CGPoint(x: 200, y: 90)
-        accuracyText.horizontalAlignmentMode = .center
-        panel.addChild(accuracyText)
+        let accuracyNum = SKLabelNode(fontNamed: "Arial-BoldMT")
+        accuracyNum.text = "\(accuracyPercent)%"
+        accuracyNum.fontSize = 45
+        accuracyNum.fontColor = accuracyPercent >= 70 ? SKColor(red: 0.2, green: 1.0, blue: 0.2, alpha: 1.0) : .white
+        accuracyNum.position = CGPoint(x: 250, y: 45)
+        accuracyNum.horizontalAlignmentMode = .center
+        panel.addChild(accuracyNum)
 
-        let restartButton = SKShapeNode(rect: CGRect(x: 100, y: 20, width: 200, height: 50), cornerRadius: 10)
-        restartButton.fillColor = .systemGreen
+        // リスタートボタン（丸いボタンにリプレイアイコン）
+        let restartButton = SKShapeNode(circleOfRadius: 40)
+        restartButton.fillColor = SKColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 1.0)
         restartButton.strokeColor = .white
-        restartButton.lineWidth = 2
+        restartButton.lineWidth = 3
+        restartButton.position = CGPoint(x: 250, y: -30)
         restartButton.name = "restartButton"
 
-        let restartLabel = SKLabelNode(fontNamed: "Arial-BoldMT")
-        restartLabel.text = "RESTART"
-        restartLabel.fontSize = 24
-        restartLabel.fontColor = .white
-        restartLabel.position = CGPoint(x: 100, y: 12)
-        restartLabel.horizontalAlignmentMode = .center
-        restartLabel.verticalAlignmentMode = .center
-        restartButton.addChild(restartLabel)
+        // リプレイアイコン（円形矢印）
+        let replayIcon = createReplayIcon()
+        replayIcon.position = CGPoint(x: 0, y: 0)
+        restartButton.addChild(replayIcon)
         panel.addChild(restartButton)
 
         gameOverPanel = panel
         addChild(panel)
+    }
+
+    private func createReplayIcon() -> SKNode {
+        let container = SKNode()
+
+        // 円形矢印（簡易版）
+        let arrow = SKShapeNode()
+        let path = CGMutablePath()
+
+        // 円弧を描く
+        path.addArc(center: .zero, radius: 20, startAngle: .pi / 4, endAngle: .pi * 1.75, clockwise: false)
+
+        arrow.path = path
+        arrow.strokeColor = .white
+        arrow.lineWidth = 4
+        arrow.fillColor = .clear
+
+        // 矢印の先端
+        let arrowHead = SKShapeNode()
+        let arrowPath = CGMutablePath()
+        arrowPath.move(to: CGPoint(x: -15, y: 15))
+        arrowPath.addLine(to: CGPoint(x: -5, y: 20))
+        arrowPath.addLine(to: CGPoint(x: -10, y: 10))
+        arrowHead.path = arrowPath
+        arrowHead.strokeColor = .white
+        arrowHead.lineWidth = 4
+
+        container.addChild(arrow)
+        container.addChild(arrowHead)
+
+        return container
     }
 
     private func restartGame() {
@@ -391,11 +518,11 @@ class GameScene: SKScene {
     }
 
     private func updateScoreLabel() {
-        scoreLabel.text = "Score: \(gameState.score)"
+        scoreLabel.text = "\(gameState.score)"
     }
 
     private func updateBulletsLabel() {
-        bulletsLabel.text = "Bullets: \(gameState.bulletsRemaining)/\(gameState.bulletsTotal)"
+        bulletsLabel.text = "\(gameState.bulletsRemaining)"
     }
 
     // MARK: - Touch Handling
