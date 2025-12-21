@@ -97,3 +97,7 @@ iOSInjectionProject/
 
 # Claude Code
 .claude/
+
+# AI
+CLAUDE.md
+GEMINI.md
