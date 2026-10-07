@@ -500,9 +500,12 @@ class GameScene: SKScene {
     private func endGame() {
         guard gameState.isGameActive else { return }
         gameState.isGameActive = false
-        onFinish?(GameResult(id: UUID(), score: gameState.score, hits: gameState.targetsDestroyed,
-                             elapsedMs: elapsedMs, shots: shots, playedAt: Date()))
+        let result = GameResult(id: UUID(), score: gameState.score, hits: gameState.targetsDestroyed,
+                                elapsedMs: elapsedMs, shots: shots, playedAt: Date())
         isPaused = true
+        let completion = onFinish
+        onFinish = nil
+        completion?(result)
     }
 
     private func reload() {

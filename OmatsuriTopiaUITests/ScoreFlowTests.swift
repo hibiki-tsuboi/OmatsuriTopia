@@ -1,6 +1,60 @@
 import XCTest
 
 final class ScoreFlowTests: XCTestCase {
+    func testLastShotShowsResultAndCanReplay() throws {
+        let app = XCUIApplication()
+        XCUIDevice.shared.orientation = .landscapeLeft
+        app.launch()
+        XCTAssertTrue(app.buttons["ひとりで遊ぶ"].waitForExistence(timeout: 10))
+        app.buttons["ひとりで遊ぶ"].tap()
+
+        for round in 1...2 {
+            var lastShotStarted: TimeInterval = 0
+            for shot in 0..<10 {
+                let size = app.frame.size
+                let fire = app.coordinate(withNormalizedOffset: .zero)
+                    .withOffset(CGVector(dx: size.width - 70, dy: size.height - 70))
+                if shot == 9 { lastShotStarted = ProcessInfo.processInfo.systemUptime }
+                if round == 2 && shot == 9 {
+                    fire.press(forDuration: 1)
+                } else {
+                    fire.tap()
+                }
+                if shot < 9 {
+                    app.coordinate(withNormalizedOffset: .zero)
+                        .withOffset(CGVector(dx: size.width - 190, dy: size.height - 70)).tap()
+                    Thread.sleep(forTimeInterval: 0.55)
+                }
+            }
+            // Do not tap reload after the final shot: the result must appear on its own.
+            XCTAssertTrue(app.staticTexts["resultScore"].waitForExistence(timeout: 3))
+            // Include XCTest's idle wait, which can otherwise hide a long UI stall.
+            let transitionTime = ProcessInfo.processInfo.systemUptime - lastShotStarted
+            XCTAssertLessThan(transitionTime, 8, "The last shot must not stall the result transition.")
+            attach(app, name: "LastShot-Round\(round)")
+            XCTAssertTrue(app.staticTexts["自己ベストをこの端末に保存しました"].exists)
+            if round == 1 {
+                app.buttons["ひとりでもう一度"].tap()
+                XCTAssertTrue(app.staticTexts["resultScore"].waitForNonExistence(timeout: 3))
+            }
+        }
+        app.buttons["おまつりに戻る"].tap()
+        XCTAssertTrue(app.buttons["ひとりで遊ぶ"].waitForExistence(timeout: 3))
+    }
+
+    func testTimeLimitShowsResultAndCanReplay() throws {
+        let app = XCUIApplication()
+        XCUIDevice.shared.orientation = .landscapeLeft
+        app.launch()
+        XCTAssertTrue(app.buttons["ひとりで遊ぶ"].waitForExistence(timeout: 10))
+        app.buttons["ひとりで遊ぶ"].tap()
+        XCTAssertTrue(app.staticTexts["resultScore"].waitForExistence(timeout: 65))
+        XCTAssertTrue(app.staticTexts["60.00秒"].exists)
+        XCTAssertTrue(app.staticTexts["命中 0/0"].exists)
+        app.buttons["ひとりでもう一度"].tap()
+        XCTAssertTrue(app.staticTexts["resultScore"].waitForNonExistence(timeout: 3))
+    }
+
     func testOfflineRoundAndPersistedBest() throws {
         let app = XCUIApplication()
         XCUIDevice.shared.orientation = .landscapeLeft
