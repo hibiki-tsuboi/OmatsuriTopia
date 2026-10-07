@@ -101,3 +101,9 @@ iOSInjectionProject/
 # AI
 CLAUDE.md
 GEMINI.md
+
+# Ranking backend
+backend/node_modules/
+backend/.wrangler/
+backend/.dev.vars
+backend/.env*

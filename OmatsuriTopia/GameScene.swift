@@ -11,8 +11,8 @@ import GameplayKit
 // MARK: - GameState
 class GameState {
     var score: Int = 0
-    var bulletsRemaining: Int = 10
-    var bulletsTotal: Int = 10
+    var bulletsRemaining: Int = GameRules.ammunition
+    var bulletsTotal: Int = GameRules.ammunition
     var isGameActive: Bool = true
     var targetsDestroyed: Int = 0
     var isLoaded: Bool = true  // 弾が装填されているか
@@ -36,7 +36,20 @@ class GameScene: SKScene {
     private var crosshair: SKShapeNode!
     private var fireButton: SKShapeNode!
     private var reloadButton: SKShapeNode!
-    private var gameOverPanel: SKNode?
+    var onFinish: ((GameResult) -> Void)?
+    private var timerLabel: SKLabelNode!
+    private let gameClock = ContinuousClock()
+    private var startedAt: ContinuousClock.Instant?
+    private var shots: [ShotRecord] = []
+    private var isReloading = false
+    private var hasSetUp = false
+
+    private var elapsedMs: Int {
+        guard let startedAt else { return 0 }
+        let elapsed = startedAt.duration(to: gameClock.now).components
+        let milliseconds = Double(elapsed.seconds) * 1000 + Double(elapsed.attoseconds) / 1_000_000_000_000_000
+        return min(Int(GameRules.duration * 1000), max(0, Int(milliseconds)))
+    }
 
     // 的のスポーンレーン（Y座標）
     private var lanes: [CGFloat] = []
@@ -45,7 +58,10 @@ class GameScene: SKScene {
     private var spawnTimer: TimeInterval = 0
     private let spawnInterval: TimeInterval = 1.0
 
-    override func sceneDidLoad() {
+    override func didMove(to view: SKView) {
+        guard !hasSetUp else { return }
+        hasSetUp = true
+        startedAt = gameClock.now
         self.lastUpdateTime = 0
 
         // お祭りっぽい背景（夜空＋提灯の明かりをイメージ）
@@ -56,6 +72,12 @@ class GameScene: SKScene {
         setupCrosshair()
         setupFireButton()
         setupReloadButton()
+        timerLabel = SKLabelNode(fontNamed: "Arial-BoldMT")
+        timerLabel.fontSize = 26
+        timerLabel.position = CGPoint(x: size.width / 2, y: size.height - 60)
+        timerLabel.zPosition = 20
+        timerLabel.text = "60秒"
+        addChild(timerLabel)
     }
 
     private func setupFestivalBackground() {
@@ -388,6 +410,10 @@ class GameScene: SKScene {
 
     private func fire() {
         guard gameState.isGameActive, gameState.bulletsRemaining > 0, gameState.isLoaded else { return }
+        let shotTime = elapsedMs
+        guard shotTime < Int(GameRules.duration * 1000) else { endGame(); return }
+        guard shots.last.map({ shotTime - $0.offsetMs >= 400 }) ?? true else { return }
+        var points = 0
 
         // 弾数を減らす
         gameState.bulletsRemaining -= 1
@@ -418,6 +444,7 @@ class GameScene: SKScene {
                 // 獲得した点数を的の位置に表示
                 showPointsLabel(points: scoreComponent.points, at: spriteComponent.node.position)
 
+                points = scoreComponent.points
                 gameState.score += scoreComponent.points
                 gameState.targetsDestroyed += 1
                 updateScoreLabel()
@@ -462,6 +489,8 @@ class GameScene: SKScene {
             ]))
         }
 
+        shots.append(ShotRecord(offsetMs: shotTime, points: points))
+
         // 弾切れチェック
         if gameState.bulletsRemaining == 0 {
             endGame()
@@ -469,110 +498,16 @@ class GameScene: SKScene {
     }
 
     private func endGame() {
+        guard gameState.isGameActive else { return }
         gameState.isGameActive = false
-
-        // ゲームオーバーパネルを表示
-        let panel = SKShapeNode(rect: CGRect(x: 0, y: 0, width: 500, height: 350), cornerRadius: 30)
-        panel.fillColor = SKColor(red: 0.15, green: 0.15, blue: 0.2, alpha: 0.95)
-        panel.strokeColor = SKColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 1.0)
-        panel.lineWidth = 5
-        panel.position = CGPoint(x: size.width / 2 - 250, y: size.height / 2 - 175)
-        panel.zPosition = 200
-
-        // 大きな星アイコン（タイトル代わり）
-        let bigStar = createStarIcon()
-        bigStar.setScale(3.0)
-        bigStar.position = CGPoint(x: 250, y: 270)
-        panel.addChild(bigStar)
-
-        // スコアアイコン + 数字
-        let scoreIcon = createStarIcon()
-        scoreIcon.position = CGPoint(x: 150, y: 190)
-        panel.addChild(scoreIcon)
-
-        let scoreNum = SKLabelNode(fontNamed: "Arial-BoldMT")
-        scoreNum.text = "\(gameState.score)"
-        scoreNum.fontSize = 50
-        scoreNum.fontColor = SKColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 1.0)
-        scoreNum.position = CGPoint(x: 250, y: 175)
-        scoreNum.horizontalAlignmentMode = .center
-        panel.addChild(scoreNum)
-
-        // 的中アイコン + 数字
-        let targetHitIcon = createTargetIcon(size: 30)
-        targetHitIcon.position = CGPoint(x: 150, y: 120)
-        panel.addChild(targetHitIcon)
-
-        let hitsNum = SKLabelNode(fontNamed: "Arial-BoldMT")
-        hitsNum.text = "\(gameState.targetsDestroyed) / \(gameState.bulletsTotal)"
-        hitsNum.fontSize = 40
-        hitsNum.fontColor = .white
-        hitsNum.position = CGPoint(x: 280, y: 105)
-        hitsNum.horizontalAlignmentMode = .center
-        panel.addChild(hitsNum)
-
-        // 命中率
-        let accuracyPercent = gameState.bulletsTotal > 0 ?
-            Int((Double(gameState.targetsDestroyed) / Double(gameState.bulletsTotal)) * 100) : 0
-        let accuracyNum = SKLabelNode(fontNamed: "Arial-BoldMT")
-        accuracyNum.text = "\(accuracyPercent)%"
-        accuracyNum.fontSize = 45
-        accuracyNum.fontColor = accuracyPercent >= 70 ? SKColor(red: 0.2, green: 1.0, blue: 0.2, alpha: 1.0) : .white
-        accuracyNum.position = CGPoint(x: 250, y: 45)
-        accuracyNum.horizontalAlignmentMode = .center
-        panel.addChild(accuracyNum)
-
-        // リスタートボタン（丸いボタンにリプレイアイコン）
-        let restartButton = SKShapeNode(circleOfRadius: 40)
-        restartButton.fillColor = SKColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 1.0)
-        restartButton.strokeColor = .white
-        restartButton.lineWidth = 3
-        restartButton.position = CGPoint(x: 250, y: -30)
-        restartButton.name = "restartButton"
-
-        // リプレイアイコン（円形矢印）
-        let replayIcon = createReplayIcon()
-        replayIcon.position = CGPoint(x: 0, y: 0)
-        restartButton.addChild(replayIcon)
-        panel.addChild(restartButton)
-
-        gameOverPanel = panel
-        addChild(panel)
-    }
-
-    private func createReplayIcon() -> SKNode {
-        let container = SKNode()
-
-        // 円形矢印（簡易版）
-        let arrow = SKShapeNode()
-        let path = CGMutablePath()
-
-        // 円弧を描く
-        path.addArc(center: .zero, radius: 20, startAngle: .pi / 4, endAngle: .pi * 1.75, clockwise: false)
-
-        arrow.path = path
-        arrow.strokeColor = .white
-        arrow.lineWidth = 4
-        arrow.fillColor = .clear
-
-        // 矢印の先端
-        let arrowHead = SKShapeNode()
-        let arrowPath = CGMutablePath()
-        arrowPath.move(to: CGPoint(x: -15, y: 15))
-        arrowPath.addLine(to: CGPoint(x: -5, y: 20))
-        arrowPath.addLine(to: CGPoint(x: -10, y: 10))
-        arrowHead.path = arrowPath
-        arrowHead.strokeColor = .white
-        arrowHead.lineWidth = 4
-
-        container.addChild(arrow)
-        container.addChild(arrowHead)
-
-        return container
+        onFinish?(GameResult(id: UUID(), score: gameState.score, hits: gameState.targetsDestroyed,
+                             elapsedMs: elapsedMs, shots: shots, playedAt: Date()))
+        isPaused = true
     }
 
     private func reload() {
-        guard gameState.isGameActive, !gameState.isLoaded else { return }
+        guard gameState.isGameActive, !gameState.isLoaded, !isReloading else { return }
+        isReloading = true
 
         // リロードアニメーション（アイコンを回転させる）
         if let icon = reloadButton.children.first {
@@ -581,8 +516,15 @@ class GameScene: SKScene {
         }
 
         // 装填状態にする
-        gameState.isLoaded = true
-        updateReloadButtonState()
+        run(SKAction.sequence([
+            SKAction.wait(forDuration: 0.4),
+            SKAction.run { [weak self] in
+                guard let self else { return }
+                self.isReloading = false
+                self.gameState.isLoaded = true
+                self.updateReloadButtonState()
+            }
+        ]))
     }
 
     private func updateReloadButtonState() {
@@ -595,36 +537,6 @@ class GameScene: SKScene {
             reloadButton.fillColor = SKColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 1.0)
             reloadButton.strokeColor = SKColor(red: 0.1, green: 0.6, blue: 0.1, alpha: 1.0)
         }
-    }
-
-    private func restartGame() {
-        // ゲームオーバーパネルを削除
-        gameOverPanel?.removeFromParent()
-        gameOverPanel = nil
-
-        // 全ての的を削除
-        for entity in entities {
-            if let spriteComponent = entity.component(ofType: SpriteComponent.self) {
-                spriteComponent.node.removeFromParent()
-            }
-        }
-        entities.removeAll()
-
-        // ゲーム状態をリセット
-        gameState.score = 0
-        gameState.bulletsRemaining = gameState.bulletsTotal
-        gameState.isGameActive = true
-        gameState.targetsDestroyed = 0
-        gameState.isLoaded = true
-        spawnTimer = 0
-
-        // UIを更新
-        updateScoreLabel()
-        updateBulletsLabel()
-        updateReloadButtonState()
-
-        // 照準器を中央に戻す
-        crosshair.position = CGPoint(x: size.width / 2, y: size.height / 2)
     }
 
     private func updateScoreLabel() {
@@ -651,16 +563,6 @@ class GameScene: SKScene {
         if reloadButton.contains(location) {
             reload()
             return
-        }
-
-        // リスタートボタンをチェック
-        if let panel = gameOverPanel {
-            let locationInPanel = touch.location(in: panel)
-            if let restartButton = panel.childNode(withName: "restartButton"),
-               restartButton.contains(locationInPanel) {
-                restartGame()
-                return
-            }
         }
 
         // ゲーム中ならスワイプで照準器を移動開始
@@ -691,13 +593,19 @@ class GameScene: SKScene {
     // MARK: - Update Loop
 
     override func update(_ currentTime: TimeInterval) {
+        guard gameState.isGameActive else { return }
+        let remaining = max(0, GameRules.duration - Double(elapsedMs) / 1000)
+        timerLabel.text = "\(Int(ceil(remaining)))秒"
+        timerLabel.fontColor = remaining <= 10 ? .systemOrange : .white
+        if remaining <= 0 { endGame(); return }
+
         // 初回の更新時刻を設定
         if (self.lastUpdateTime == 0) {
             self.lastUpdateTime = currentTime
         }
 
         // デルタタイムを計算
-        let dt = currentTime - self.lastUpdateTime
+        let dt = min(currentTime - self.lastUpdateTime, 0.1)
 
         // エンティティを更新
         for entity in self.entities {

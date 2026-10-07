@@ -6,19 +6,36 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+        A10000000000000000000001 = {isa = PBXContainerItemProxy; containerPortal = B6AD1E772EF7885E006EBBF8; proxyType = 1; remoteGlobalIDString = B6AD1E7E2EF7885E006EBBF8; remoteInfo = OmatsuriTopia; };
+/* End PBXContainerItemProxy section */
+/* Begin PBXTargetDependency section */
+        A10000000000000000000002 = {isa = PBXTargetDependency; target = B6AD1E7E2EF7885E006EBBF8; targetProxy = A10000000000000000000001; };
+/* End PBXTargetDependency section */
 /* Begin PBXFileReference section */
+        A10000000000000000000003 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = OmatsuriTopiaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B6AD1E7F2EF7885E006EBBF8 /* OmatsuriTopia.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OmatsuriTopia.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+        A1000000000000000000000C = {
+            isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+            membershipExceptions = ("App-Info.plist");
+            target = B6AD1E7E2EF7885E006EBBF8;
+        };
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+        A10000000000000000000004 = {isa = PBXFileSystemSynchronizedRootGroup; path = OmatsuriTopiaUITests; sourceTree = "<group>"; };
 		B6AD1E812EF7885E006EBBF8 /* OmatsuriTopia */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = OmatsuriTopia;
+            exceptions = (A1000000000000000000000C);
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+        A1000000000000000000000A = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		B6AD1E7C2EF7885E006EBBF8 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -33,6 +50,7 @@
 			isa = PBXGroup;
 			children = (
 				B6AD1E812EF7885E006EBBF8 /* OmatsuriTopia */,
+                A10000000000000000000004,
 				B6AD1E802EF7885E006EBBF8 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +59,7 @@
 			isa = PBXGroup;
 			children = (
 				B6AD1E7F2EF7885E006EBBF8 /* OmatsuriTopia.app */,
+                A10000000000000000000003,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,6 +67,18 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+        A10000000000000000000005 = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = A10000000000000000000006;
+            buildPhases = (A10000000000000000000009, A1000000000000000000000A, A1000000000000000000000B);
+            buildRules = ();
+            dependencies = (A10000000000000000000002);
+            fileSystemSynchronizedGroups = (A10000000000000000000004);
+            name = OmatsuriTopiaUITests;
+            productName = OmatsuriTopiaUITests;
+            productReference = A10000000000000000000003;
+            productType = "com.apple.product-type.bundle.ui-testing";
+        };
 		B6AD1E7E2EF7885E006EBBF8 /* OmatsuriTopia */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = B6AD1E962EF7885E006EBBF8 /* Build configuration list for PBXNativeTarget "OmatsuriTopia" */;
@@ -100,11 +131,13 @@
 			projectRoot = "";
 			targets = (
 				B6AD1E7E2EF7885E006EBBF8 /* OmatsuriTopia */,
+                A10000000000000000000005,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+        A1000000000000000000000B = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		B6AD1E7D2EF7885E006EBBF8 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -115,6 +148,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+        A10000000000000000000009 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		B6AD1E7B2EF7885E006EBBF8 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -125,6 +159,27 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+        A10000000000000000000007 = {isa = XCBuildConfiguration; buildSettings = {
+            CODE_SIGN_STYLE = Automatic;
+            GENERATE_INFOPLIST_FILE = YES;
+            IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+            PRODUCT_BUNDLE_IDENTIFIER = jp.hibiki.omatsuritopia.UITests;
+            PRODUCT_NAME = "$(TARGET_NAME)";
+            SWIFT_VERSION = 5.0;
+            TARGETED_DEVICE_FAMILY = "1,2";
+            TEST_TARGET_NAME = OmatsuriTopia;
+        }; name = Debug; };
+        A10000000000000000000008 = {isa = XCBuildConfiguration; buildSettings = {
+            CODE_SIGN_STYLE = Automatic;
+            GENERATE_INFOPLIST_FILE = YES;
+            IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+            PRODUCT_BUNDLE_IDENTIFIER = jp.hibiki.omatsuritopia.UITests;
+            PRODUCT_NAME = "$(TARGET_NAME)";
+            SWIFT_VERSION = 5.0;
+            TARGETED_DEVICE_FAMILY = "1,2";
+            TEST_TARGET_NAME = OmatsuriTopia;
+        }; name = Release; };
+
 		B6AD1E942EF7885E006EBBF8 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -309,6 +364,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+        A10000000000000000000006 = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000007, A10000000000000000000008); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		B6AD1E7A2EF7885E006EBBF8 /* Build configuration list for PBXProject "OmatsuriTopia" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
