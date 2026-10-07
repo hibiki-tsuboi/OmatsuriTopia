@@ -16,7 +16,6 @@ final class FestivalModel: ObservableObject {
     @Published var submissionMessage: String?
     @Published var showConsent = false
     @Published var showPrivacy = false
-    @Published var showDeleteConfirmation = false
     @Published var pendingCount = 0
 
     var play: (() -> Void)?

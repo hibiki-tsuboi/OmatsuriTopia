@@ -2,6 +2,8 @@ import SwiftUI
 
 struct FestivalOverlay: View {
     @ObservedObject var model: FestivalModel
+    @State private var showSettings = false
+    @State private var showDeleteConfirmation = false
     private let gold = Color(red: 1, green: 0.79, blue: 0.34)
 
     var body: some View {
@@ -27,13 +29,7 @@ struct FestivalOverlay: View {
         .tint(gold)
         .sheet(isPresented: $model.showConsent) { consent }
         .sheet(isPresented: $model.showPrivacy) { privacy }
-        .confirmationDialog("ランキング参加をやめて、オンライン記録を削除しますか？",
-                            isPresented: $model.showDeleteConfirmation, titleVisibility: .visible) {
-            Button("オンライン記録を削除", role: .destructive) { model.deleteOnlineRecords() }
-            Button("キャンセル", role: .cancel) { }
-        } message: {
-            Text("表示名・参加情報・全国ランキングの記録を削除します。端末の自己ベストは残ります。")
-        }
+        .sheet(isPresented: $showSettings) { settings }
     }
 
     private var home: some View {
@@ -63,13 +59,18 @@ struct FestivalOverlay: View {
                     if let message = model.message { note(message) }
                     if model.participates, let name = model.profileName {
                         Text(name).font(.caption).foregroundStyle(gold)
-                        Button("参加をやめて記録を削除") { model.showDeleteConfirmation = true }
-                            .font(.caption).disabled(model.busy || model.sending)
+                            .accessibilityIdentifier("rankingPlayerName")
                     } else {
                         Text("全国への挑戦は任意参加・本名入力なし")
                             .font(.caption).foregroundStyle(.white.opacity(0.65))
                     }
                     HStack(spacing: 18) {
+                        Button {
+                            model.message = nil
+                            showSettings = true
+                        } label: {
+                            Label("設定", systemImage: "gearshape")
+                        }.disabled(model.busy)
                         Button("プライバシー") { model.showPrivacy = true }
                         if model.pendingCount > 0 {
                             Button("未送信 \(model.pendingCount)件を再送") { Task { await model.retryPending() } }
@@ -202,6 +203,50 @@ struct FestivalOverlay: View {
         }
     }
 
+    private var settings: some View {
+        NavigationStack {
+            Form {
+                Section("ランキング参加情報") {
+                    if model.participates {
+                        if let name = model.profileName {
+                            LabeledContent("表示名", value: name)
+                        }
+                        Button("参加をやめて記録を削除", role: .destructive) {
+                            showDeleteConfirmation = true
+                        }.disabled(model.busy || model.sending)
+                        Text("表示名・参加情報・全国ランキングの記録を削除します。端末の自己ベストは残ります。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    } else {
+                        Text("全国ランキングには参加していません。")
+                        Text("タイトル画面の「全国に挑戦」から参加できます。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if model.busy { ProgressView("処理中…") }
+                    if model.sending {
+                        Text("スコアを送信中です。送信が終わると削除できます。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if let message = model.message { Text(message).font(.footnote) }
+                }
+                Section {
+                    NavigationLink("プライバシーポリシー") { privacyContent }
+                }
+            }
+            .navigationTitle("設定")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) {
+                Button("閉じる") { showSettings = false }.disabled(model.busy)
+            } }
+            .alert("ランキング参加をやめて、オンライン記録を削除しますか？",
+                   isPresented: $showDeleteConfirmation) {
+                Button("オンライン記録を削除", role: .destructive) { model.deleteOnlineRecords() }
+                Button("キャンセル", role: .cancel) { }
+            } message: {
+                Text("表示名・参加情報・全国ランキングの記録を削除します。端末の自己ベストは残ります。")
+            }
+        }.preferredColorScheme(.dark).tint(gold).interactiveDismissDisabled(model.busy)
+    }
+
     private var consent: some View {
         NavigationStack {
             ScrollView {
@@ -210,16 +255,14 @@ struct FestivalOverlay: View {
                     Text("表示名は自動で作られます。本名やメールアドレスの入力はありません。")
                     Text("参加すると匿名の参加IDを作成し、全国に挑戦したときの得点・命中数・プレイ時間・発射記録をCloudflareへ送信します。表示名・得点・タイム・順位は他のプレイヤーにも公開されます。")
                     Text("ランキングは日本時間の月曜0時に更新。60秒・10発で競います。アプリを閉じている間も制限時間は進みます。")
-                    Text("参加はいつでもやめられ、メニューからオンライン記録を削除できます。端末を替えた際の記録の引き継ぎには対応していません。")
+                    Text("参加はいつでもやめられ、タイトル画面の「設定」からオンライン記録を削除できます。端末を替えた際の記録の引き継ぎには対応していません。")
                     if let message = model.message { Text(message).foregroundStyle(.orange) }
                     Button { model.join() } label: {
                         HStack { if model.busy { ProgressView() }; Text("内容を確認して参加する").bold() }
                             .frame(maxWidth: .infinity).padding()
                     }.buttonStyle(.borderedProminent).disabled(model.busy)
                     NavigationLink("プライバシーポリシーを読む") {
-                        ScrollView {
-                            Text(privacyText).font(.body).frame(maxWidth: .infinity, alignment: .leading).padding(24)
-                        }.navigationTitle("プライバシーポリシー").navigationBarTitleDisplayMode(.inline)
+                        privacyContent
                     }
                 }.padding(24)
             }
@@ -233,13 +276,17 @@ struct FestivalOverlay: View {
 
     private var privacy: some View {
         NavigationStack {
-            ScrollView {
-                Text(privacyText).font(.body).frame(maxWidth: .infinity, alignment: .leading).padding(24)
-            }
-            .navigationTitle("プライバシーポリシー")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("閉じる") { model.showPrivacy = false } } }
+            privacyContent
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("閉じる") { model.showPrivacy = false } } }
         }.preferredColorScheme(.dark)
+    }
+
+    private var privacyContent: some View {
+        ScrollView {
+            Text(privacyText).font(.body).frame(maxWidth: .infinity, alignment: .leading).padding(24)
+        }
+        .navigationTitle("プライバシーポリシー")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var privacyText: String {

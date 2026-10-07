@@ -78,7 +78,11 @@ final class ScoreFlowTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.staticTexts["personalBest"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["personalBest"].label, best)
-        app.buttons["プライバシー"].tap()
+        XCTAssertFalse(app.buttons["参加をやめて記録を削除"].exists)
+        app.buttons["設定"].tap()
+        XCTAssertTrue(app.navigationBars["設定"].waitForExistence(timeout: 5))
+        attach(app, name: "Settings")
+        app.buttons["プライバシーポリシー"].tap()
         XCTAssertTrue(app.navigationBars["プライバシーポリシー"].waitForExistence(timeout: 5))
     }
 
@@ -89,11 +93,15 @@ final class ScoreFlowTests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         app.launch()
         XCTAssertTrue(app.buttons["全国に挑戦"].waitForExistence(timeout: 10))
+        app.buttons["設定"].tap()
+        XCTAssertTrue(app.navigationBars["設定"].waitForExistence(timeout: 5))
         try XCTSkipIf(app.buttons["参加をやめて記録を削除"].exists, "Preserve any existing player.")
+        app.buttons["閉じる"].tap()
         app.buttons["全国に挑戦"].tap()
         XCTAssertTrue(app.buttons["内容を確認して参加する"].waitForExistence(timeout: 5))
         app.buttons["内容を確認して参加する"].tap()
-        XCTAssertTrue(app.buttons["参加をやめて記録を削除"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["rankingPlayerName"].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.buttons["参加をやめて記録を削除"].exists)
         app.buttons["全国に挑戦"].tap()
         XCTAssertTrue(app.buttons["全国に挑戦"].waitForNonExistence(timeout: 20))
         for _ in 0..<10 {
@@ -107,10 +115,21 @@ final class ScoreFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["あなたの順位"].waitForExistence(timeout: 20))
         attach(app, name: "WeeklyRanking")
         app.buttons["戻る"].tap()
+        let best = app.staticTexts["personalBest"].label
+        app.buttons["設定"].tap()
+        XCTAssertTrue(app.buttons["参加をやめて記録を削除"].waitForExistence(timeout: 5))
+        attach(app, name: "RankingSettings")
+        app.buttons["参加をやめて記録を削除"].tap()
+        XCTAssertTrue(app.buttons["オンライン記録を削除"].waitForExistence(timeout: 5))
+        app.buttons["キャンセル"].tap()
+        XCTAssertTrue(app.buttons["参加をやめて記録を削除"].exists)
         app.buttons["参加をやめて記録を削除"].tap()
         app.buttons["オンライン記録を削除"].tap()
         XCTAssertTrue(app.staticTexts["オンライン記録を削除しました。端末の自己ベストは残っています。"].waitForExistence(timeout: 20))
         XCTAssertFalse(app.buttons["参加をやめて記録を削除"].exists)
+        app.buttons["閉じる"].tap()
+        XCTAssertTrue(app.buttons["全国に挑戦"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["personalBest"].label, best)
     }
 
     private func attach(_ app: XCUIApplication, name: String) {
