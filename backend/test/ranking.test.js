@@ -1,12 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import worker, { RULES, weekFor, validateRound } from '../src/index.js';
 
-function environment() {
+const migrationsURL = new URL('../migrations/', import.meta.url);
+const migrations = readdirSync(migrationsURL).filter(name => name.endsWith('.sql')).sort();
+function migrate(sqlite, name) {
+  sqlite.exec('BEGIN');
+  try {
+    sqlite.exec(readFileSync(new URL(name, migrationsURL), 'utf8'));
+    sqlite.exec('COMMIT');
+  } catch (error) { sqlite.exec('ROLLBACK'); throw error; }
+}
+function environment({ legacy = false } = {}) {
   const sqlite = new DatabaseSync(':memory:');
-  sqlite.exec(readFileSync(new URL('../migrations/0001_ranking.sql', import.meta.url), 'utf8'));
+  sqlite.exec('PRAGMA foreign_keys = ON');
+  for (const name of legacy ? migrations.slice(0, 1) : migrations) migrate(sqlite, name);
   const prepare = sql => {
     let params = [];
     return {
@@ -63,6 +73,94 @@ test('registration is idempotent and requires a strong bearer token', async () =
   assert.deepEqual(a, b);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM players').get().n, 1);
   assert.ok(!JSON.stringify(a).includes(token));
+});
+
+test('duplicate generated names are retried without replacing the existing player', async t => {
+  const { call, sqlite } = environment();
+  const values = [7, 7, 8];
+  t.mock.method(crypto, 'getRandomValues', bytes => { bytes.set([0, 0, values.shift()]); return bytes; });
+  const first = await register(call);
+  const second = await register(call, other);
+  assert.equal(first.name, '金色のきつね0007');
+  assert.equal(second.name, '金色のきつね0008');
+  assert.notEqual(first.id, second.id);
+  assert.equal(values.length, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM players').get().n, 2);
+  assert.deepEqual(await register(call), first);
+  assert.deepEqual(await register(call, other), second);
+});
+
+test('concurrent registrations with the same name receive distinct names', async t => {
+  const { call, sqlite } = environment();
+  const values = [42, 42, 43];
+  t.mock.method(crypto, 'getRandomValues', bytes => { bytes.set([1, 1, values.shift()]); return bytes; });
+  const profiles = await Promise.all([register(call), register(call, other)]);
+  assert.equal(new Set(profiles.map(profile => profile.id)).size, 2);
+  assert.deepEqual(profiles.map(profile => profile.name).sort(), ['星空のたぬき0042', '星空のたぬき0043']);
+  assert.equal(sqlite.prepare('SELECT COUNT(DISTINCT name) AS n FROM players').get().n, 2);
+});
+
+test('concurrent registration retries of one identity return the same player', async t => {
+  const { call, sqlite } = environment();
+  let suffix = 0;
+  t.mock.method(crypto, 'getRandomValues', bytes => { bytes.set([0, 0, suffix++]); return bytes; });
+  const profiles = await Promise.all(Array.from({ length: 5 }, () => register(call)));
+  assert.ok(profiles.every(profile => profile.id === profiles[0].id && profile.name === profiles[0].name));
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM players').get().n, 1);
+});
+
+test('name collisions stop after bounded retries and a later retry can succeed', async t => {
+  const { call, sqlite } = environment();
+  const random = t.mock.method(crypto, 'getRandomValues', bytes => { bytes.fill(0); return bytes; });
+  const first = await register(call);
+  random.mock.resetCalls();
+  const failed = await call('/v1/players', 'POST', other);
+  assert.equal(failed.status, 503);
+  assert.match((await failed.json()).error, /表示名/);
+  assert.equal(random.mock.callCount(), 10);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM players').get().n, 1);
+  random.mock.mockImplementation(bytes => { bytes.set([0, 0, 1]); return bytes; });
+  const second = await register(call, other);
+  assert.notEqual(second.name, first.name);
+  assert.deepEqual(await register(call), first);
+});
+
+test('migration resolves legacy duplicates while preserving identities and scores', () => {
+  const { sqlite } = environment({ legacy: true });
+  const insert = sqlite.prepare('INSERT INTO players(id,token_hash,name,created_at) VALUES(?,?,?,?)');
+  insert.run('b', 'token-b', '金色のきつね0001', 2);
+  insert.run('a', 'token-a', '金色のきつね0001', 1);
+  insert.run('c', 'token-c', '金色のきつね0001', 2);
+  insert.run('d', 'token-d', '星空のねこ1234', 1);
+  sqlite.prepare('INSERT INTO rounds(id,player_id,rules,week,started_at,expires_at) VALUES(?,?,?,?,?,?)')
+    .run('round-b', 'b', RULES, '2026-10-12', 1, 600001);
+  sqlite.prepare('UPDATE rounds SET score = 500, elapsed_ms = 10000, hits = 10 WHERE id = ?').run('round-b');
+  const rounds = sqlite.prepare('SELECT * FROM rounds').all();
+  const bests = sqlite.prepare('SELECT * FROM weekly_bests').all();
+  migrate(sqlite, '0002_unique_player_names.sql');
+  assert.deepEqual(sqlite.prepare('SELECT id,token_hash,name FROM players ORDER BY id').all().map(row => ({ ...row })), [
+    { id: 'a', token_hash: 'token-a', name: '金色のきつね0001' },
+    { id: 'b', token_hash: 'token-b', name: '金色のきつね0001-2' },
+    { id: 'c', token_hash: 'token-c', name: '金色のきつね0001-3' },
+    { id: 'd', token_hash: 'token-d', name: '星空のねこ1234' }
+  ]);
+  assert.deepEqual(sqlite.prepare('SELECT * FROM rounds').all(), rounds);
+  assert.deepEqual(sqlite.prepare('SELECT * FROM weekly_bests').all(), bests);
+  assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(), []);
+  assert.throws(() => insert.run('e', 'token-e', '金色のきつね0001', 3), /UNIQUE/);
+  assert.throws(() => sqlite.prepare('UPDATE players SET name = ? WHERE id = ?').run('金色のきつね0001', 'd'), /UNIQUE/);
+});
+
+test('migration rolls back if a manually edited name occupies a legacy suffix', () => {
+  const { sqlite } = environment({ legacy: true });
+  const insert = sqlite.prepare('INSERT INTO players(id,token_hash,name,created_at) VALUES(?,?,?,?)');
+  insert.run('a', 'token-a', '金色のきつね0001', 1);
+  insert.run('b', 'token-b', '金色のきつね0001', 2);
+  insert.run('c', 'token-c', '金色のきつね0001-2', 3);
+  const before = sqlite.prepare('SELECT * FROM players ORDER BY id').all();
+  assert.throws(() => migrate(sqlite, '0002_unique_player_names.sql'), /UNIQUE/);
+  assert.deepEqual(sqlite.prepare('SELECT * FROM players ORDER BY id').all(), before);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name = 'players_name_unique'").get().n, 0);
 });
 
 test('completed scores are idempotent, immutable and owned by authenticated player', async t => {

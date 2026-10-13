@@ -4,15 +4,25 @@ import { setTimeout } from 'node:timers/promises';
 
 const base = process.argv[2] || 'http://localhost:8787';
 const token = randomBytes(32).toString('hex');
-const request = (path, method = 'GET', body = undefined) => fetch(base + path, {
-  method, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+const otherToken = randomBytes(32).toString('hex');
+const request = (path, method = 'GET', body = undefined, key = token) => fetch(base + path, {
+  method, headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
   ...(body ? { body: JSON.stringify(body) } : {})
 });
-let registered = false;
+const registered = [];
 try {
-  const profile = await request('/v1/players', 'POST');
-  assert.ok(profile.ok, `Registration failed: ${profile.status} ${await profile.text()}`);
-  registered = true;
+  const profiles = [];
+  for (const key of [token, otherToken]) {
+    const response = await request('/v1/players', 'POST', undefined, key);
+    assert.equal(response.status, 201);
+    registered.push(key);
+    profiles.push(await response.json());
+  }
+  assert.notEqual(profiles[0].name, profiles[1].name);
+  assert.notEqual(profiles[0].id, profiles[1].id);
+  const repeated = await request('/v1/players', 'POST');
+  assert.equal(repeated.status, 200);
+  assert.deepEqual(await repeated.json(), profiles[0]);
   const start = await request('/v1/rounds', 'POST', { rules: 'festival-60-v1' });
   assert.equal(start.status, 201);
   const round = await start.json();
@@ -25,12 +35,12 @@ try {
   const board = await (await request('/v1/leaderboard')).json();
   assert.equal(board.me.score, 0);
   assert.ok(board.entries.some(row => row.isMe));
-  console.log('PASS: registration, session, submission, retry, weekly ranking');
+  console.log('PASS: unique names, idempotent registration, session, submission, retry, weekly ranking');
 } finally {
-  if (registered) {
-    const deleted = await request('/v1/player', 'DELETE');
+  for (const key of registered) {
+    const deleted = await request('/v1/player', 'DELETE', undefined, key);
     assert.equal(deleted.status, 204);
-    assert.equal((await request('/v1/leaderboard')).status, 401);
+    assert.equal((await request('/v1/leaderboard', 'GET', undefined, key)).status, 401);
     console.log('PASS: deleted the temporary test player and its scores');
   }
 }

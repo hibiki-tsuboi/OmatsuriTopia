@@ -11,7 +11,7 @@ npm ci
 npm test
 npm run db:local
 npm run dev
-# In a second terminal; creates and deletes a temporary player:
+# In a second terminal; creates and deletes temporary players:
 node test/smoke.mjs http://localhost:8787
 ```
 
@@ -27,11 +27,11 @@ npm run deploy
 node test/smoke.mjs https://omatsuritopia-ranking.hibiki-apps.workers.dev
 ```
 
-The smoke test creates a temporary anonymous player, posts a zero-point result, verifies its rank, and deletes it in `finally`. Run it only against an endpoint you operate. D1 IDs are configuration, not credentials. For another account, create a separate D1 database and replace `database_id`; ensure both rate-limit namespace IDs are unused there. Never point development migrations at an unrelated database.
+The smoke test creates two temporary anonymous players, checks distinct names and idempotent registration, posts a zero-point result, verifies its rank, and deletes both players in `finally`. Run it only against an endpoint you operate. D1 IDs are configuration, not credentials. For another account, create a separate D1 database and replace `database_id`; ensure both rate-limit namespace IDs are unused there. Never point development migrations at an unrelated database.
 
 ## API and rules
 
-- `POST /v1/players`: register an anonymous player using a client-generated 256-bit hexadecimal bearer token. Idempotent for that token. Returns an automatically generated public name and private player ID.
+- `POST /v1/players`: register an anonymous player using a client-generated 256-bit hexadecimal bearer token. Idempotent for that token, including concurrent retries. Returns an automatically generated, unique public name and private player ID.
 - `POST /v1/rounds`: authenticated; body `{ "rules": "festival-60-v1" }`. Returns a one-use round ID, start week, and upload deadline.
 - `POST /v1/rounds/:id/score`: authenticated; `{ rules, elapsedMs, shots: [{ offsetMs, points }] }`. The API derives score/hits, validates timings, and atomically updates the weekly best through a trigger. Repeating the same result succeeds; modifying it fails.
 - `GET /v1/leaderboard`: top 100 plus the caller's rank if authenticated. Exact score/time ties share rank. Private IDs/tokens are excluded.
@@ -45,6 +45,10 @@ Both client and server use `festival-60-v1`; change the rules version when scori
 ## Identity, failure handling, and limits
 
 The iOS app stores the bearer token in a device-only Keychain item and the participation choice separately. D1 stores only its SHA-256 hash. Registration retries reuse the same token. There is no email/password login or cross-device account recovery.
+
+Player names use six adjectives, six animals and four digits (360,000 combinations). The `players_name_unique` index prevents duplicate names across currently registered players, including concurrent registrations. A name collision triggers a fresh random candidate, up to 10 attempts; exhaustion returns a retryable 503 without creating or overwriting a player. Deleted names can be reused.
+
+Apply `0002_unique_player_names.sql` before deploying this Worker version. It preserves the oldest occurrence of each legacy name and adds `-2`, `-3`, etc. to duplicates, keeping IDs and scores intact. Legacy generated names contain no hyphens. If manually edited names cause a suffix collision, the migration fails and rolls back for inspection instead of deleting data. Existing iOS installations may retain an old name in their local profile cache if a duplicate is renamed; the ranking always uses the server name.
 
 Solo play needs no network. Ranked play must obtain a round before starting. Completed ranked results are persisted before upload and retried on network recovery, foregrounding, or an explicit retry. Expired results are dropped from the upload queue while the personal best remains. A ranked start waits for prior pending results; solo play remains immediately available.
 

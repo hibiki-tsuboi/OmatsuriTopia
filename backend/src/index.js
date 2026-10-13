@@ -2,6 +2,7 @@ export const RULES = 'festival-60-v1';
 const DURATION = 60_000;
 const VALID_POINTS = new Set([0, 20, 50, 100, 200, 300, 350, 400, 500]);
 const DAY = 86_400_000;
+const NAME_ATTEMPTS = 10;
 
 class APIError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -82,11 +83,18 @@ async function register(request, env, now) {
   const id = crypto.randomUUID();
   const adjectives = ['金色の', '星空の', 'お祭りの', '元気な', '夕焼けの', '虹色の'];
   const animals = ['きつね', 'たぬき', 'うさぎ', 'ねこ', 'パンダ', 'ペンギン'];
-  const bytes = crypto.getRandomValues(new Uint32Array(3));
-  const name = adjectives[bytes[0] % adjectives.length] + animals[bytes[1] % animals.length] + (bytes[2] % 10000).toString().padStart(4, '0');
-  await env.DB.prepare('INSERT INTO players(id, token_hash, name, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(token_hash) DO NOTHING')
-    .bind(id, tokenHash, name, now).run();
-  return json(await env.DB.prepare('SELECT id, name FROM players WHERE token_hash = ?').bind(tokenHash).first(), 201);
+  for (let attempt = 0; attempt < NAME_ATTEMPTS; attempt++) {
+    const bytes = crypto.getRandomValues(new Uint32Array(3));
+    const name = adjectives[bytes[0] % adjectives.length] + animals[bytes[1] % animals.length] + (bytes[2] % 10000).toString().padStart(4, '0');
+    // Let the unique indexes arbitrate concurrent registrations; never overwrite a player.
+    const created = await env.DB.prepare(`INSERT INTO players(id, token_hash, name, created_at) VALUES (?, ?, ?, ?)
+      ON CONFLICT(token_hash) DO NOTHING ON CONFLICT(name) DO NOTHING RETURNING id, name`)
+      .bind(id, tokenHash, name, now).first();
+    if (created) return json(created, 201);
+    const registered = await env.DB.prepare('SELECT id, name FROM players WHERE token_hash = ?').bind(tokenHash).first();
+    if (registered) return json(registered);
+  }
+  throw new APIError(503, '表示名を用意できませんでした。少し時間をおいてから参加してください。');
 }
 async function startRound(request, env, player, now) {
   const body = await readJSON(request);
