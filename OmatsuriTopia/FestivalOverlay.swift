@@ -36,7 +36,7 @@ struct FestivalOverlay: View {
         HStack(spacing: 32) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    Label("WEEKLY CHALLENGE", systemImage: "sparkles")
+                    Label("ALL-TIME CHALLENGE", systemImage: "sparkles")
                         .font(.caption.weight(.bold)).tracking(3).foregroundStyle(gold)
                     Text("おまつり\nトピア").font(.system(size: 42, weight: .black, design: .rounded)).lineSpacing(-2)
                     Text("一発に、願いをこめて。")
@@ -50,11 +50,11 @@ struct FestivalOverlay: View {
             }
             ScrollView {
                 VStack(spacing: 10) {
-                    Text("今週の射的じまん、集まれ。")
+                    Text("全国の射的じまん、集まれ。")
                         .font(.headline).frame(maxWidth: .infinity, alignment: .leading)
                     action("全国に挑戦", icon: "trophy.fill", prominent: true) { model.start(ranked: true) }
                     action("ひとりで遊ぶ", icon: "scope") { model.start(ranked: false) }
-                    action("週間ランキング", icon: "list.number") { model.loadRanking() }
+                    action("通算ランキング", icon: "list.number") { model.loadRanking() }
                     if model.busy { ProgressView().tint(gold).accessibilityLabel("通信中") }
                     if let message = model.message { note(message) }
                     if model.participates, let name = model.profileName {
@@ -194,15 +194,15 @@ struct FestivalOverlay: View {
                     Label("戻る", systemImage: "chevron.left")
                 }.disabled(model.busy)
                 Spacer()
-                Text("週間ランキング").font(.title2.bold())
+                Text("通算ランキング").font(.title2.bold())
                 Spacer()
                 Button { model.loadRanking() } label: { Image(systemName: "arrow.clockwise") }
                     .accessibilityLabel("ランキングを更新").disabled(model.busy)
             }
             HStack {
-                Text(model.ranking.map { "\($0.week.replacingOccurrences(of: "-", with: "/")) からの一週間" } ?? "全国の記録")
+                Text("これまでの最高スコアで競おう")
                 Spacer()
-                Text("月曜 0:00 更新・日本時間")
+                Text("期間によるリセットなし")
             }.font(.caption).foregroundStyle(.white.opacity(0.65))
             if model.busy {
                 Spacer()
@@ -220,7 +220,7 @@ struct FestivalOverlay: View {
                 if ranking.entries.isEmpty {
                     Spacer()
                     Image(systemName: "trophy").font(.largeTitle).foregroundStyle(gold)
-                    Text("今週の最初の挑戦者になろう").font(.headline)
+                    Text("最初の挑戦者になろう").font(.headline)
                     Text("「全国に挑戦」で遊ぶと、ここに記録が並びます。")
                         .font(.subheadline).foregroundStyle(.secondary)
                     Spacer()
@@ -306,7 +306,7 @@ struct FestivalOverlay: View {
                     Label("全国の射的じまんと競おう", systemImage: "trophy.fill").font(.title2.bold())
                     Text("表示名は自動で作られます。本名やメールアドレスの入力はありません。")
                     Text("参加すると匿名の参加IDを作成し、全国に挑戦したときの得点・命中数・プレイ時間・発射記録をCloudflareへ送信します。表示名・得点・タイム・順位は他のプレイヤーにも公開されます。")
-                    Text("ランキングは日本時間の月曜0時に更新。60秒・10発で競います。アプリを閉じている間も制限時間は進みます。")
+                    Text("通算ランキングは、これまでの最高スコアで競います。同点ならタイムが短い記録が上位です。期間によるリセットはありません。60秒・10発で挑戦し、アプリを閉じている間も制限時間は進みます。")
                     Text("参加はいつでもやめられ、タイトル画面の「設定」からオンライン記録を削除できます。端末を替えた際の記録の引き継ぎには対応していません。")
                     if let message = model.message { Text(message).foregroundStyle(.orange) }
                     Button { model.join() } label: {

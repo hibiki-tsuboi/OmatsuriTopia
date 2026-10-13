@@ -124,12 +124,12 @@ final class ScoreFlowTests: XCTestCase {
                 Thread.sleep(forTimeInterval: 0.55)
             }
         }
-        XCTAssertTrue(app.staticTexts["週間ランキングに登録しました"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["通算ランキングに登録しました"].waitForExistence(timeout: 20))
         app.buttons["resultConfirm"].tap()
-        XCTAssertTrue(app.buttons["週間ランキング"].waitForExistence(timeout: 3))
-        app.buttons["週間ランキング"].tap()
+        XCTAssertTrue(app.buttons["通算ランキング"].waitForExistence(timeout: 3))
+        app.buttons["通算ランキング"].tap()
         XCTAssertTrue(app.staticTexts["あなたの順位"].waitForExistence(timeout: 20))
-        attach(app, name: "WeeklyRanking")
+        attach(app, name: "AllTimeRanking")
         app.buttons["戻る"].tap()
         let best = app.staticTexts["personalBest"].label
         app.buttons["設定"].tap()

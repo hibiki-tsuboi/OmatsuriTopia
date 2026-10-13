@@ -43,6 +43,7 @@ function environment({ legacy = false } = {}) {
 }
 const token = 'a'.repeat(64);
 const other = 'b'.repeat(64);
+const allTimePath = '/v1/leaderboard/all-time';
 const valid = (points = 50) => ({ rules: RULES, elapsedMs: 10000, shots: Array.from({ length: 10 }, (_, i) => ({ offsetMs: (i + 1) * 1000, points })) });
 async function register(call, key = token) { const r = await call('/v1/players', 'POST', key); assert.ok(r.ok); return r.json(); }
 async function start(call, key = token) { const r = await call('/v1/rounds', 'POST', key, { rules: RULES }); assert.equal(r.status, 201); return r.json(); }
@@ -175,13 +176,16 @@ test('completed scores are idempotent, immutable and owned by authenticated play
   assert.equal((await call(`/v1/rounds/${round.id}/score`, 'POST', token, valid())).status, 200);
   assert.equal((await call(`/v1/rounds/${round.id}/score`, 'POST', token, valid(100))).status, 409);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM weekly_bests').get().n, 1);
-  const ranking = await (await call('/v1/leaderboard', 'GET', token)).json();
-  assert.equal(ranking.me.rank, 1); assert.equal(ranking.me.score, 500);
-  assert.equal(ranking.entries[0].isMe, true);
-  assert.equal('id' in ranking.entries[0], false);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM all_time_bests').get().n, 1);
+  for (const path of ['/v1/leaderboard', allTimePath]) {
+    const ranking = await (await call(path, 'GET', token)).json();
+    assert.equal(ranking.me.rank, 1); assert.equal(ranking.me.score, 500);
+    assert.equal(ranking.entries[0].isMe, true);
+    assert.equal('id' in ranking.entries[0], false);
+  }
 });
 
-test('weekly best never regresses and faster equal scores win; exact ties share rank', async t => {
+test('weekly and all-time bests never regress and faster equal scores win; exact ties share rank', async t => {
   t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-07T00:00:00Z') });
   const { call } = environment();
   await register(call); await register(call, other);
@@ -191,9 +195,11 @@ test('weekly best never regresses and faster equal scores win; exact ties share 
     body.shots = body.shots.map((s, i) => ({ ...s, offsetMs: (i + 1) * duration / 10 }));
     assert.equal((await call(`/v1/rounds/${r.id}/score`, 'POST', key, body)).status, 200);
   }
-  const board = await (await call('/v1/leaderboard', 'GET', token)).json();
-  assert.equal(board.me.score, 1000); assert.equal(board.me.elapsedMs, 9000);
-  assert.deepEqual(board.entries.map(e => e.rank), [1, 1]);
+  for (const path of ['/v1/leaderboard', allTimePath]) {
+    const board = await (await call(path, 'GET', token)).json();
+    assert.equal(board.me.score, 1000); assert.equal(board.me.elapsedMs, 9000);
+    assert.deepEqual(board.entries.map(e => e.rank), [1, 1]);
+  }
 });
 
 test('expired and superseded rounds reject new scores, accepted retries survive expiry', async t => {
@@ -218,21 +224,27 @@ test('Sunday round belongs to start week even when submitted on Monday', async t
   assert.equal((await call(`/v1/rounds/${round.id}/score`, 'POST', token, valid())).status, 200);
   assert.equal(sqlite.prepare('SELECT week FROM weekly_bests').get().week, '2026-09-28');
   assert.deepEqual((await (await call('/v1/leaderboard')).json()).entries, []);
+  assert.equal((await (await call(allTimePath)).json()).entries[0].score, 500);
 });
 
 test('own rank is available below the top 100 and guest views omit ownership', async () => {
   const { call, sqlite } = environment(); const me = await register(call);
   const insertPlayer = sqlite.prepare('INSERT INTO players(id,token_hash,name,created_at) VALUES(?,?,?,?)');
   const insertBest = sqlite.prepare('INSERT INTO weekly_bests VALUES(?,?,?,?,?,?,?)');
+  const insertAllTimeBest = sqlite.prepare('INSERT INTO all_time_bests VALUES(?,?,?,?,?,?)');
   for (let i = 0; i < 105; i++) {
     insertPlayer.run(String(i), String(i), 'player' + i, Date.now());
     insertBest.run(String(i), weekFor(Date.now()), RULES, 1000 + i, 10000, 10, Date.now());
+    insertAllTimeBest.run(String(i), RULES, 1000 + i, 10000, 10, Date.now());
   }
   insertBest.run(me.id, weekFor(Date.now()), RULES, 500, 10000, 10, Date.now());
-  const board = await (await call('/v1/leaderboard', 'GET', token)).json();
-  assert.equal(board.entries.length, 100); assert.equal(board.me.rank, 106);
-  const guest = await (await call('/v1/leaderboard')).json();
-  assert.equal(guest.me, null); assert.ok(guest.entries.every(e => !e.isMe));
+  insertAllTimeBest.run(me.id, RULES, 500, 10000, 10, Date.now());
+  for (const path of ['/v1/leaderboard', allTimePath]) {
+    const board = await (await call(path, 'GET', token)).json();
+    assert.equal(board.entries.length, 100); assert.equal(board.me.rank, 106);
+    const guest = await (await call(path)).json();
+    assert.equal(guest.me, null); assert.ok(guest.entries.every(e => !e.isMe));
+  }
 });
 
 test('deletion removes player, sessions and best scores, but not another player', async t => {
@@ -241,7 +253,7 @@ test('deletion removes player, sessions and best scores, but not another player'
   const r = await start(call); t.mock.timers.tick(10000);
   await call(`/v1/rounds/${r.id}/score`, 'POST', token, valid());
   assert.equal((await call('/v1/player', 'DELETE', token)).status, 204);
-  for (const table of ['rounds', 'weekly_bests']) assert.equal(sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n, 0);
+  for (const table of ['rounds', 'weekly_bests', 'all_time_bests']) assert.equal(sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n, 0);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM players').get().n, 1);
   assert.equal((await call('/v1/rounds', 'POST', token, { rules: RULES })).status, 401);
 });
@@ -254,6 +266,7 @@ test('rate limits, oversized bodies and malformed JSON are handled', async () =>
   assert.equal(response.status, 400);
   env.REQUEST_LIMIT.limit = async () => ({ success: false });
   assert.equal((await call('/v1/leaderboard')).status, 429);
+  assert.equal((await call(allTimePath)).status, 429);
 });
 
 test('registration throttling preserves retries for an existing identity', async () => {
@@ -264,10 +277,11 @@ test('registration throttling preserves retries for an existing identity', async
   assert.equal((await call('/v1/players', 'POST', other)).status, 429);
 });
 
-test('scheduled cleanup respects recent records and removes expired data', async t => {
+test('scheduled cleanup expires rounds, weekly bests and scoreless players but retains all-time records', async t => {
   t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-07T00:00:00Z') });
   const { call, env, sqlite } = environment();
   const profile = await register(call);
+  await register(call, other);
   const round = await start(call); t.mock.timers.tick(10000);
   await call(`/v1/rounds/${round.id}/score`, 'POST', token, valid());
   await worker.scheduled({}, env);
@@ -279,8 +293,105 @@ test('scheduled cleanup respects recent records and removes expired data', async
   t.mock.timers.tick(100 * 86400000);
   await worker.scheduled({}, env);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM weekly_bests').get().n, 0);
-  assert.equal(sqlite.prepare('SELECT id FROM players').get().id, profile.id);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM all_time_bests').get().n, 1);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM players').get().n, 2);
   t.mock.timers.tick(365 * 86400000);
   await worker.scheduled({}, env);
+  assert.deepEqual(sqlite.prepare('SELECT id FROM players').all().map(row => row.id), [profile.id]);
+  const board = await (await call(allTimePath, 'GET', token)).json();
+  assert.equal(board.me.score, 500);
+  assert.equal(board.entries.length, 1);
+});
+
+test('all-time migration selects one complete best record per player and rules and preserves pending rounds', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-13T00:00:00Z') });
+  const { call, sqlite } = environment({ legacy: true });
+  migrate(sqlite, '0002_unique_player_names.sql');
+  const player = await register(call);
+  const second = await register(call, other);
+  const insert = sqlite.prepare('INSERT INTO weekly_bests VALUES(?,?,?,?,?,?,?)');
+  insert.run(player.id, '2026-08-31', RULES, 1000, 10000, 8, 1);
+  insert.run(player.id, '2026-09-07', RULES, 1000, 9000, 9, 2);
+  insert.run(player.id, '2026-09-14', RULES, 1000, 9000, 10, 3);
+  insert.run(player.id, '2026-09-21', RULES, 500, 5000, 5, 4);
+  insert.run(player.id, '2026-09-28', 'another-rules-version', 5000, 6000, 10, 5);
+  insert.run(second.id, '2026-09-28', RULES, 0, 60000, 0, 5);
+  const pending = await start(call);
+  const before = sqlite.prepare('SELECT * FROM weekly_bests ORDER BY player_id, week').all();
+  const roundsBefore = sqlite.prepare('SELECT * FROM rounds').all();
+  migrate(sqlite, '0003_all_time_ranking.sql');
+  assert.deepEqual(sqlite.prepare('SELECT * FROM weekly_bests ORDER BY player_id, week').all(), before);
+  assert.deepEqual(sqlite.prepare('SELECT * FROM rounds').all(), roundsBefore);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM all_time_bests').get().n, 3);
+  assert.deepEqual({ ...sqlite.prepare('SELECT * FROM all_time_bests WHERE player_id = ? AND rules = ?').get(player.id, RULES) },
+    { player_id: player.id, rules: RULES, score: 1000, elapsed_ms: 9000, hits: 9, achieved_at: 2 });
+  const migrated = await (await call(allTimePath, 'GET', token)).json();
+  assert.equal(migrated.me.score, 1000);
+  assert.equal(migrated.entries.length, 2);
+  assert.deepEqual(migrated.entries.map(row => row.rank), [1, 2]);
+  t.mock.timers.tick(10000);
+  assert.equal((await call(`/v1/rounds/${pending.id}/score`, 'POST', token, valid(200))).status, 200);
+  assert.equal((await (await call(allTimePath, 'GET', token)).json()).me.score, 2000);
+  assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(), []);
+});
+
+test('all-time best survives new weeks, months and years and only a better result replaces it', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-04T14:59:50Z') });
+  const { call, sqlite } = environment();
+  await register(call);
+  const first = await start(call);
+  t.mock.timers.tick(10000);
+  await call(`/v1/rounds/${first.id}/score`, 'POST', token, valid(100));
+  for (const date of ['2026-10-12T00:00:00Z', '2026-11-01T00:00:00Z', '2027-01-01T00:00:00Z']) {
+    t.mock.timers.setTime(Date.parse(date));
+    const round = await start(call);
+    t.mock.timers.tick(10000);
+    await call(`/v1/rounds/${round.id}/score`, 'POST', token, valid(50));
+    const board = await (await call(allTimePath, 'GET', token)).json();
+    assert.equal(board.me.score, 1000);
+    assert.equal(board.entries.length, 1);
+    assert.equal('week' in board, false);
+  }
+  const improved = await start(call);
+  t.mock.timers.tick(10000);
+  await call(`/v1/rounds/${improved.id}/score`, 'POST', token, valid(200));
+  assert.equal((await (await call(allTimePath, 'GET', token)).json()).me.score, 2000);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM all_time_bests').get().n, 1);
+});
+
+test('all-time ranking handles empty boards, invalid identities, rule isolation and tied ranks', async () => {
+  const { call, sqlite } = environment();
+  assert.deepEqual(await (await call(allTimePath)).json(), { rules: RULES, entries: [], me: null });
+  assert.equal((await call(allTimePath, 'GET', token)).status, 401);
+  const player = await register(call);
+  assert.equal((await (await call(allTimePath, 'GET', token)).json()).me, null);
+  const second = await register(call, other);
+  const third = await register(call, 'c'.repeat(64));
+  const insert = sqlite.prepare('INSERT INTO all_time_bests VALUES(?,?,?,?,?,?)');
+  insert.run(player.id, 'another-rules-version', 5000, 5000, 10, 1);
+  assert.deepEqual(await (await call(allTimePath, 'GET', token)).json(), { rules: RULES, entries: [], me: null });
+  insert.run(player.id, RULES, 500, 10000, 10, 2);
+  insert.run(second.id, RULES, 1000, 10000, 10, 3);
+  insert.run(third.id, RULES, 1000, 10000, 10, 4);
+  const board = await (await call(allTimePath, 'GET', token)).json();
+  assert.deepEqual(board.entries.map(row => row.rank), [1, 1, 3]);
+  assert.equal(board.me.rank, 3);
+  assert.equal(board.entries.filter(row => row.isMe).length, 1);
+  assert.equal(board.entries[0].name, second.name);
+});
+
+test('zero-point all-time records survive inactivity until the player explicitly deletes them', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-13T00:00:00Z') });
+  const { call, sqlite, env } = environment();
+  await register(call);
+  const round = await start(call);
+  t.mock.timers.tick(10000);
+  await call(`/v1/rounds/${round.id}/score`, 'POST', token, valid(0));
+  t.mock.timers.tick(400 * 86400000);
+  await worker.scheduled({}, env);
+  assert.equal((await (await call(allTimePath, 'GET', token)).json()).me.score, 0);
+  assert.equal((await call('/v1/player', 'DELETE', token)).status, 204);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM all_time_bests').get().n, 0);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM players').get().n, 0);
+  assert.equal((await call(allTimePath, 'GET', token)).status, 401);
 });

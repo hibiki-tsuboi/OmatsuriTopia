@@ -20,8 +20,7 @@ struct RankingEntry: Decodable {
     let isMe: Bool?
 }
 
-struct WeeklyRanking: Decodable {
-    let week: String
+struct AllTimeRanking: Decodable {
     let rules: String
     let entries: [RankingEntry]
     let me: RankingEntry?
@@ -112,8 +111,8 @@ final class RankingAPI {
                                         body: JSONEncoder().encode(body))
     }
 
-    func leaderboard(token: String?) async throws -> WeeklyRanking {
-        try await request("v1/leaderboard", token: token)
+    func leaderboard(token: String?) async throws -> AllTimeRanking {
+        try await request("v1/leaderboard/all-time", token: token)
     }
 
     func delete(token: String) async throws {

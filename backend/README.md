@@ -27,18 +27,21 @@ npm run deploy
 node test/smoke.mjs https://omatsuritopia-ranking.hibiki-apps.workers.dev
 ```
 
+Apply migrations through `0003_all_time_ranking.sql`, then deploy the Worker before releasing the updated iOS app. The migration copies each player's best surviving weekly record per rules version into `all_time_bests`, preferring a shorter elapsed time on tied scores and the earliest achievement on exact ties. Records already removed by past cleanup cannot be recovered. Existing weekly records and pending rounds remain intact; the new trigger captures scores from both old and new apps. Deploy the new cleanup handler promptly after migration so inactive players with all-time records are retained.
+
 The smoke test creates two temporary anonymous players, checks distinct names and idempotent registration, posts a zero-point result, verifies its rank, and deletes both players in `finally`. Run it only against an endpoint you operate. D1 IDs are configuration, not credentials. For another account, create a separate D1 database and replace `database_id`; ensure both rate-limit namespace IDs are unused there. Never point development migrations at an unrelated database.
 
 ## API and rules
 
 - `POST /v1/players`: register an anonymous player using a client-generated 256-bit hexadecimal bearer token. Idempotent for that token, including concurrent retries. Returns an automatically generated, unique public name and private player ID.
-- `POST /v1/rounds`: authenticated; body `{ "rules": "festival-60-v1" }`. Returns a one-use round ID, start week, and upload deadline.
-- `POST /v1/rounds/:id/score`: authenticated; `{ rules, elapsedMs, shots: [{ offsetMs, points }] }`. The API derives score/hits, validates timings, and atomically updates the weekly best through a trigger. Repeating the same result succeeds; modifying it fails.
-- `GET /v1/leaderboard`: top 100 plus the caller's rank if authenticated. Exact score/time ties share rank. Private IDs/tokens are excluded.
-- `DELETE /v1/player`: authenticated; deletes the player and cascades to rounds and weekly records.
+- `POST /v1/rounds`: authenticated; body `{ "rules": "festival-60-v1" }`. Returns a one-use round ID, start week (for legacy clients), and upload deadline.
+- `POST /v1/rounds/:id/score`: authenticated; `{ rules, elapsedMs, shots: [{ offsetMs, points }] }`. The API derives score/hits, validates timings, and atomically updates the all-time and legacy weekly bests through triggers. Repeating the same result succeeds; modifying it fails.
+- `GET /v1/leaderboard/all-time`: the current app's all-time top 100 plus the caller's rank if authenticated. Returns `{ rules, entries, me }`. Each player appears once with their best score for the current rules version. Exact score/time ties share rank. Private IDs/tokens are excluded.
+- `GET /v1/leaderboard`: legacy weekly ranking, including the original `week` field, for older app versions. Its semantics are unchanged so old apps never label all-time scores as weekly scores.
+- `DELETE /v1/player`: authenticated; deletes the player and cascades to rounds, all-time records, and weekly records.
 - `GET /health`: service/rules identifier.
 
-Rules: 60 seconds, 10 shots, at least 400 ms between shots. A game ends on the tenth shot or at the time limit. Scores are ranked descending, elapsed milliseconds ascending. Week boundaries are Monday 00:00 Asia/Tokyo, based on server-issued round start time. Finishing across the boundary records the previous week. A new round invalidates unfinished older rounds. Uploads expire 10 minutes after starting.
+Rules: 60 seconds, 10 shots, at least 400 ms between shots. A game ends on the tenth shot or at the time limit. Scores are ranked descending, elapsed milliseconds ascending. All-time rankings have no periodic reset; lower scores never replace a player's best. Legacy week boundaries remain Monday 00:00 Asia/Tokyo, based on server-issued round start time, including games finished across the boundary. A new round invalidates unfinished older rounds. Uploads expire 10 minutes after starting.
 
 Both client and server use `festival-60-v1`; change the rules version when scoring or timing rules change. Local personal bests and server rankings are separated by version.
 
@@ -54,7 +57,7 @@ Solo play needs no network. Ranked play must obtain a round before starting. Com
 
 Per-token request limits, registration IP limits, server-side start cooldowns, body-size limits, ownership checks, legal-score validation, and idempotent writes deter simple abuse. **These checks do not prove a genuine gameplay result:** a modified client can fabricate plausible shots. App Attest and server-verifiable game events would be the next steps before prizes or high-stakes competition. Rate-limit bindings are per Cloudflare location, not a strict global quota.
 
-Daily cleanup removes expired rounds after a day, weekly bests after roughly 90–97 days, and inactive players after a year. Worker invocation logging is disabled; never add logging of authorization headers or shot payloads. Keep `privacy-policy.md` and the bundled `PrivacyPolicy.txt` synchronized when behavior changes.
+Daily cleanup removes expired rounds after a day and legacy weekly bests after roughly 90–97 days. All-time bests and their player identities remain until the player requests deletion, even after a year without play. Only players with no all-time record in any rules version are removed after a year of inactivity. Worker invocation logging is disabled; never add logging of authorization headers or shot payloads. Keep `privacy-policy.md` and the bundled `PrivacyPolicy.txt` synchronized when behavior changes.
 
 ## iOS verification
 

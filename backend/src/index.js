@@ -149,6 +149,23 @@ async function leaderboard(request, env, now) {
   }
   return json({ week, rules: RULES, entries: rows.results.map(({ id, ...row }) => ({ ...row, isMe: id === player?.id })), me });
 }
+async function allTimeLeaderboard(request, env) {
+  const player = request.headers.has('authorization') ? await playerFor(request, env) : null;
+  const rows = await env.DB.prepare(`SELECT p.id, p.name, b.score, b.elapsed_ms AS elapsedMs,
+    RANK() OVER (ORDER BY b.score DESC, b.elapsed_ms ASC) AS rank
+    FROM all_time_bests b JOIN players p ON p.id = b.player_id
+    WHERE b.rules = ? ORDER BY b.score DESC, b.elapsed_ms ASC, b.achieved_at ASC, p.id ASC LIMIT 100`)
+    .bind(RULES).all();
+  let me = null;
+  if (player) {
+    me = await env.DB.prepare(`SELECT p.name, b.score, b.elapsed_ms AS elapsedMs,
+      1 + (SELECT COUNT(*) FROM all_time_bests other WHERE other.rules = b.rules
+        AND (other.score > b.score OR (other.score = b.score AND other.elapsed_ms < b.elapsed_ms))) AS rank
+      FROM all_time_bests b JOIN players p ON p.id = b.player_id
+      WHERE b.player_id = ? AND b.rules = ?`).bind(player.id, RULES).first();
+  }
+  return json({ rules: RULES, entries: rows.results.map(({ id, ...row }) => ({ ...row, isMe: id === player?.id })), me });
+}
 export default {
   async fetch(request, env) {
     try {
@@ -160,6 +177,7 @@ export default {
       if (!(await env.REQUEST_LIMIT.limit({ key: rateKey })).success) throw new APIError(429, 'しばらく待ってから再度お試しください。');
       if (request.method === 'POST' && path === '/v1/players') return await register(request, env, now);
       if (request.method === 'GET' && path === '/v1/leaderboard') return await leaderboard(request, env, now);
+      if (request.method === 'GET' && path === '/v1/leaderboard/all-time') return await allTimeLeaderboard(request, env);
       const player = await playerFor(request, env);
       if (request.method === 'DELETE' && path === '/v1/player') {
         await env.DB.prepare('DELETE FROM players WHERE id = ?').bind(player.id).run();
@@ -179,7 +197,8 @@ export default {
     await env.DB.batch([
       env.DB.prepare('DELETE FROM rounds WHERE expires_at < ?').bind(now - DAY),
       env.DB.prepare('DELETE FROM weekly_bests WHERE week < ?').bind(weekFor(now - 90 * DAY)),
-      env.DB.prepare('DELETE FROM players WHERE MAX(created_at, last_started_at) < ?').bind(now - 365 * DAY)
+      env.DB.prepare(`DELETE FROM players WHERE MAX(created_at, last_started_at) < ?
+        AND NOT EXISTS (SELECT 1 FROM all_time_bests WHERE player_id = players.id)`).bind(now - 365 * DAY)
     ]);
   }
 };

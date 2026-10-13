@@ -11,7 +11,7 @@ final class FestivalModel: ObservableObject {
     @Published var profileName: String?
     @Published var participates = false
     @Published var busy = false
-    @Published var ranking: WeeklyRanking?
+    @Published var ranking: AllTimeRanking?
     @Published var message: String?
     @Published var submissionMessage: String?
     @Published var showConsent = false
@@ -135,7 +135,7 @@ final class FestivalModel: ObservableObject {
                 do {
                     try await api.submit(item, token: identity.token)
                     store.removePending(item.round.id)
-                    if result?.id == item.result.id { submissionMessage = "週間ランキングに登録しました" }
+                    if result?.id == item.result.id { submissionMessage = "通算ランキングに登録しました" }
                 } catch let error as RankingError where [400, 404, 409, 410].contains(error.status) {
                     store.removePending(item.round.id)
                     if result?.id == item.result.id { submissionMessage = error.message }

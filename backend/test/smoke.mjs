@@ -32,15 +32,16 @@ try {
   const submitted = await request(`/v1/rounds/${round.id}/score`, 'POST', body);
   assert.equal(submitted.status, 200, await submitted.text());
   assert.equal((await request(`/v1/rounds/${round.id}/score`, 'POST', body)).status, 200);
-  const board = await (await request('/v1/leaderboard')).json();
+  const board = await (await request('/v1/leaderboard/all-time')).json();
+  assert.equal('week' in board, false);
   assert.equal(board.me.score, 0);
   assert.ok(board.entries.some(row => row.isMe));
-  console.log('PASS: unique names, idempotent registration, session, submission, retry, weekly ranking');
+  console.log('PASS: unique names, idempotent registration, session, submission, retry, all-time ranking');
 } finally {
   for (const key of registered) {
     const deleted = await request('/v1/player', 'DELETE', undefined, key);
     assert.equal(deleted.status, 204);
-    assert.equal((await request('/v1/leaderboard', 'GET', undefined, key)).status, 401);
+    assert.equal((await request('/v1/leaderboard/all-time', 'GET', undefined, key)).status, 401);
     console.log('PASS: deleted the temporary test player and its scores');
   }
 }
