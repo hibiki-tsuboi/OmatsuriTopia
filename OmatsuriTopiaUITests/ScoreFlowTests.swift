@@ -1,7 +1,7 @@
 import XCTest
 
 final class ScoreFlowTests: XCTestCase {
-    func testLastShotShowsResultAndCanReplay() throws {
+    func testLastShotWaitsForConfirmationBeforeReturningToTitle() throws {
         let app = XCUIApplication()
         XCUIDevice.shared.orientation = .landscapeLeft
         app.launch()
@@ -31,27 +31,37 @@ final class ScoreFlowTests: XCTestCase {
             // Include XCTest's idle wait, which can otherwise hide a long UI stall.
             let transitionTime = ProcessInfo.processInfo.systemUptime - lastShotStarted
             XCTAssertLessThan(transitionTime, 8, "The last shot must not stall the result transition.")
+            XCTAssertTrue(app.staticTexts["結果発表"].exists)
+            XCTAssertEqual(app.staticTexts["resultEndReason"].label, "10発すべて撃ち終えました")
             attach(app, name: "LastShot-Round\(round)")
             XCTAssertTrue(app.staticTexts["自己ベストをこの端末に保存しました"].exists)
+            assertResultWaitsForConfirmation(app)
+            app.buttons["resultConfirm"].tap()
+            XCTAssertTrue(app.buttons["ひとりで遊ぶ"].waitForExistence(timeout: 3))
             if round == 1 {
-                app.buttons["ひとりでもう一度"].tap()
+                app.buttons["ひとりで遊ぶ"].tap()
                 XCTAssertTrue(app.staticTexts["resultScore"].waitForNonExistence(timeout: 3))
             }
         }
-        app.buttons["おまつりに戻る"].tap()
-        XCTAssertTrue(app.buttons["ひとりで遊ぶ"].waitForExistence(timeout: 3))
     }
 
-    func testTimeLimitShowsResultAndCanReplay() throws {
+    func testTimeLimitWaitsForConfirmationBeforeReturningToTitle() throws {
         let app = XCUIApplication()
         XCUIDevice.shared.orientation = .landscapeLeft
         app.launch()
         XCTAssertTrue(app.buttons["ひとりで遊ぶ"].waitForExistence(timeout: 10))
         app.buttons["ひとりで遊ぶ"].tap()
         XCTAssertTrue(app.staticTexts["resultScore"].waitForExistence(timeout: 65))
-        XCTAssertTrue(app.staticTexts["60.00秒"].exists)
+        XCTAssertEqual(app.staticTexts["resultEndReason"].label, "時間切れ")
+        XCTAssertEqual(app.staticTexts["resultScore"].label, "0")
+        XCTAssertTrue(app.staticTexts["プレイ時間 60.00秒"].exists)
         XCTAssertTrue(app.staticTexts["命中 0/0"].exists)
-        app.buttons["ひとりでもう一度"].tap()
+        XCTAssertTrue(app.staticTexts["命中率 0%"].exists)
+        attach(app, name: "TimeLimit")
+        assertResultWaitsForConfirmation(app)
+        app.buttons["resultConfirm"].tap()
+        XCTAssertTrue(app.buttons["ひとりで遊ぶ"].waitForExistence(timeout: 3))
+        app.buttons["ひとりで遊ぶ"].tap()
         XCTAssertTrue(app.staticTexts["resultScore"].waitForNonExistence(timeout: 3))
     }
 
@@ -63,11 +73,13 @@ final class ScoreFlowTests: XCTestCase {
         attach(app, name: "Home")
         app.buttons["ひとりで遊ぶ"].tap()
         // Existing SpriteKit controls: fire in the lower right, reload just to its left.
-        for _ in 0..<10 {
+        for shot in 0..<10 {
             let size = app.frame.size
             app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: size.width - 70, dy: size.height - 70)).tap()
-            app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: size.width - 190, dy: size.height - 70)).tap()
-            Thread.sleep(forTimeInterval: 0.55)
+            if shot < 9 {
+                app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: size.width - 190, dy: size.height - 70)).tap()
+                Thread.sleep(forTimeInterval: 0.55)
+            }
         }
         XCTAssertTrue(app.staticTexts["resultScore"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.staticTexts["自己ベストをこの端末に保存しました"].exists)
@@ -104,13 +116,17 @@ final class ScoreFlowTests: XCTestCase {
         XCTAssertFalse(app.buttons["参加をやめて記録を削除"].exists)
         app.buttons["全国に挑戦"].tap()
         XCTAssertTrue(app.buttons["全国に挑戦"].waitForNonExistence(timeout: 20))
-        for _ in 0..<10 {
+        for shot in 0..<10 {
             let size = app.frame.size
             app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: size.width - 70, dy: size.height - 70)).tap()
-            app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: size.width - 190, dy: size.height - 70)).tap()
-            Thread.sleep(forTimeInterval: 0.55)
+            if shot < 9 {
+                app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: size.width - 190, dy: size.height - 70)).tap()
+                Thread.sleep(forTimeInterval: 0.55)
+            }
         }
         XCTAssertTrue(app.staticTexts["週間ランキングに登録しました"].waitForExistence(timeout: 20))
+        app.buttons["resultConfirm"].tap()
+        XCTAssertTrue(app.buttons["週間ランキング"].waitForExistence(timeout: 3))
         app.buttons["週間ランキング"].tap()
         XCTAssertTrue(app.staticTexts["あなたの順位"].waitForExistence(timeout: 20))
         attach(app, name: "WeeklyRanking")
@@ -130,6 +146,19 @@ final class ScoreFlowTests: XCTestCase {
         app.buttons["閉じる"].tap()
         XCTAssertTrue(app.buttons["全国に挑戦"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["personalBest"].label, best)
+    }
+
+    private func assertResultWaitsForConfirmation(_ app: XCUIApplication) {
+        let score = app.staticTexts["resultScore"].label
+        XCTAssertTrue(app.buttons["resultConfirm"].isHittable)
+        XCTAssertFalse(app.buttons["ひとりで遊ぶ"].exists)
+        XCTAssertFalse(app.buttons["全国に挑戦"].exists)
+        // Tapping outside the card must not dismiss the result or start another game.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.1)).tap()
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertEqual(app.staticTexts["resultScore"].label, score)
+        XCTAssertTrue(app.buttons["resultConfirm"].isHittable)
+        XCTAssertFalse(app.buttons["ひとりで遊ぶ"].exists)
     }
 
     private func attach(_ app: XCUIApplication, name: String) {
