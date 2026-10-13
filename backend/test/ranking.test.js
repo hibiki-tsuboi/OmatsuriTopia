@@ -423,8 +423,9 @@ test('all-time migration selects one complete best record per player and rules a
     { player_id: player.id, rules: RULES, score: 1000, elapsed_ms: 9000, hits: 9, achieved_at: 2 });
   const migrated = await (await call(allTimePath, 'GET', token)).json();
   assert.equal(migrated.me.score, 1000);
-  assert.equal(migrated.entries.length, 2);
-  assert.deepEqual(migrated.entries.map(row => row.rank), [1, 2]);
+  assert.equal(migrated.entries.length, 1);
+  assert.deepEqual(migrated.entries.map(row => row.rank), [1]);
+  assert.equal((await (await call(allTimePath, 'GET', other)).json()).me, null);
   t.mock.timers.tick(10000);
   assert.equal((await call(`/v1/rounds/${pending.id}/score`, 'POST', token, valid(200))).status, 200);
   assert.equal((await (await call(allTimePath, 'GET', token)).json()).me.score, 2000);
@@ -476,7 +477,92 @@ test('all-time ranking handles empty boards, invalid identities, rule isolation 
   assert.equal(board.entries[0].name, second.name);
 });
 
-test('zero-point all-time records survive inactivity until the player explicitly deletes them', async t => {
+test('zero-point rounds finish idempotently without entering either leaderboard', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-13T00:00:00Z') });
+  const { call, sqlite } = environment();
+  await register(call);
+  for (const body of [valid(0), { rules: RULES, elapsedMs: 60000, shots: [] }]) {
+    const round = await start(call);
+    t.mock.timers.tick(body.elapsedMs);
+    const path = `/v1/rounds/${round.id}/score`;
+    assert.equal((await call(path, 'POST', token, body)).status, 200);
+    assert.equal((await call(path, 'POST', token, body)).status, 200);
+    assert.equal((await call(path, 'POST', token, valid(20))).status, 409);
+    assert.equal(sqlite.prepare('SELECT score FROM rounds WHERE id = ?').get(round.id).score, 0);
+    for (const boardPath of ['/v1/leaderboard', allTimePath]) {
+      const board = await (await call(boardPath, 'GET', token)).json();
+      assert.deepEqual(board.entries, []);
+      assert.equal(board.me, null);
+    }
+  }
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM weekly_bests').get().n, 0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM all_time_bests').get().n, 0);
+});
+
+test('one hit qualifies and later zero-point rounds preserve the complete personal best', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-13T00:00:00Z') });
+  const { call, sqlite } = environment();
+  await register(call);
+  const first = await start(call);
+  const body = valid(0);
+  body.shots[0].points = 20;
+  t.mock.timers.tick(10000);
+  assert.equal((await call(`/v1/rounds/${first.id}/score`, 'POST', token, body)).status, 200);
+  const weeklyBefore = sqlite.prepare('SELECT * FROM weekly_bests').all();
+  const allTimeBefore = sqlite.prepare('SELECT * FROM all_time_bests').all();
+  for (const zero of [valid(0), { rules: RULES, elapsedMs: 60000, shots: [] }]) {
+    const round = await start(call);
+    t.mock.timers.tick(zero.elapsedMs);
+    assert.equal((await call(`/v1/rounds/${round.id}/score`, 'POST', token, zero)).status, 200);
+  }
+  assert.deepEqual(sqlite.prepare('SELECT * FROM weekly_bests').all(), weeklyBefore);
+  assert.deepEqual(sqlite.prepare('SELECT * FROM all_time_bests').all(), allTimeBefore);
+  for (const path of ['/v1/leaderboard', allTimePath]) {
+    const board = await (await call(path, 'GET', token)).json();
+    assert.equal(board.entries.length, 1);
+    assert.equal(board.me.score, 20);
+    assert.equal(board.me.rank, 1);
+    assert.equal(board.me.elapsedMs, 10000);
+  }
+});
+
+test('positive-score migration preserves existing records and pending rounds while legacy zeros stay hidden', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-13T00:00:00Z') });
+  const { call, sqlite } = environment({ legacy: true });
+  migrate(sqlite, '0002_unique_player_names.sql');
+  migrate(sqlite, '0003_all_time_ranking.sql');
+  const zeroPlayer = await register(call);
+  await register(call, other);
+  for (const [key, points] of [[token, 0], [other, 50]]) {
+    const round = await start(call, key);
+    t.mock.timers.tick(10000);
+    assert.equal((await call(`/v1/rounds/${round.id}/score`, 'POST', key, valid(points))).status, 200);
+  }
+  const pending = await start(call);
+  const tables = ['players', 'rounds', 'weekly_bests', 'all_time_bests'];
+  const before = tables.map(table => sqlite.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
+  migrate(sqlite, '0004_positive_score_rankings.sql');
+  tables.forEach((table, i) => assert.deepEqual(sqlite.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all(), before[i]));
+  for (const path of ['/v1/leaderboard', allTimePath]) {
+    for (const key of [token, null]) {
+      const board = await (await call(path, 'GET', key)).json();
+      assert.equal(board.me, null);
+      assert.deepEqual(board.entries.map(row => [row.score, row.rank]), [[500, 1]]);
+      assert.ok(board.entries.every(row => !row.isMe));
+    }
+  }
+  t.mock.timers.tick(10000);
+  assert.equal((await call(`/v1/rounds/${pending.id}/score`, 'POST', token, valid(20))).status, 200);
+  for (const path of ['/v1/leaderboard', allTimePath]) {
+    const board = await (await call(path, 'GET', token)).json();
+    assert.equal(board.me.score, 200);
+    assert.equal(board.me.rank, 2);
+  }
+  assert.equal(sqlite.prepare('SELECT id FROM players WHERE id = ?').get(zeroPlayer.id).id, zeroPlayer.id);
+  assert.deepEqual(sqlite.prepare('PRAGMA foreign_key_check').all(), []);
+});
+
+test('new zero-only players use the normal inactive-player cleanup', async t => {
   t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-13T00:00:00Z') });
   const { call, sqlite, env } = environment();
   await register(call);
@@ -485,8 +571,7 @@ test('zero-point all-time records survive inactivity until the player explicitly
   await call(`/v1/rounds/${round.id}/score`, 'POST', token, valid(0));
   t.mock.timers.tick(400 * 86400000);
   await worker.scheduled({}, env);
-  assert.equal((await (await call(allTimePath, 'GET', token)).json()).me.score, 0);
-  assert.equal((await call('/v1/player', 'DELETE', token)).status, 204);
+  assert.deepEqual((await (await call(allTimePath)).json()).entries, []);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM all_time_bests').get().n, 0);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM players').get().n, 0);
   assert.equal((await call(allTimePath, 'GET', token)).status, 401);

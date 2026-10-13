@@ -19,6 +19,7 @@ struct GameResult: Codable {
     let shots: [ShotRecord]
     let playedAt: Date
 
+    var isRankingEligible: Bool { score > 0 }
     var accuracy: Int { shots.isEmpty ? 0 : Int(Double(hits) / Double(shots.count) * 100) }
     var timeText: String { String(format: "%.2f秒", Double(elapsedMs) / 1000) }
 
@@ -46,7 +47,10 @@ final class ScoreStore {
     init(defaults: UserDefaults = .standard) { self.defaults = defaults }
 
     var best: GameResult? { read(GameResult.self, key: "best") }
-    var pending: [PendingScore] { read([PendingScore].self, key: "pending") ?? [] }
+    // Older app versions may have queued zero-point rounds. Do not retry those uploads.
+    var pending: [PendingScore] {
+        (read([PendingScore].self, key: "pending") ?? []).filter { $0.result.isRankingEligible }
+    }
     var participates: Bool {
         get { defaults.bool(forKey: "ranking.participates") }
         set { defaults.set(newValue, forKey: "ranking.participates") }
@@ -60,6 +64,7 @@ final class ScoreStore {
     }
 
     func enqueue(_ result: GameResult, round: RankedRound) {
+        guard result.isRankingEligible else { return }
         var values = pending.filter { $0.round.id != round.id && $0.round.expiresAt > Date().timeIntervalSince1970 * 1000 }
         values.append(PendingScore(round: round, result: result))
         write(Array(values.suffix(20)), key: "pending")

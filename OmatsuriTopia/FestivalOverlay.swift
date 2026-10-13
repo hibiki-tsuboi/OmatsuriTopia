@@ -130,7 +130,7 @@ struct FestivalOverlay: View {
                     Spacer()
                     Image(systemName: "trophy").font(.largeTitle).foregroundStyle(gold)
                     Text("最初の挑戦者になろう").font(.headline)
-                    Text("「全国に挑戦」で遊ぶと、ここに記録が並びます。")
+                    Text("「全国に挑戦」で的に当てると、ここに記録が並びます。")
                         .font(.subheadline).foregroundStyle(.secondary)
                     Spacer()
                 } else {
@@ -214,8 +214,8 @@ struct FestivalOverlay: View {
                 VStack(alignment: .leading, spacing: 18) {
                     Label("全国の射的じまんと競おう", systemImage: "trophy.fill").font(.title2.bold())
                     Text("表示名は自動で作られます。本名やメールアドレスの入力はありません。")
-                    Text("参加すると匿名の参加IDを作成し、全国に挑戦したときの得点・命中数・プレイ時間・発射記録をCloudflareへ送信します。表示名・得点・タイム・順位は他のプレイヤーにも公開されます。")
-                    Text("通算ランキングは、これまでの最高スコアで競います。同点ならタイムが短い記録が上位です。期間によるリセットはありません。60秒・10発で挑戦し、アプリを閉じている間も制限時間は進みます。")
+                    Text("参加すると匿名の参加IDを作成し、全国に挑戦すると開始情報をCloudflareへ送信します。得点がある場合は得点・命中数・プレイ時間・発射記録も送信し、表示名・得点・タイム・順位を他のプレイヤーに公開します。")
+                    Text("通算ランキングは、的に当てて獲得した最高スコアで競います。0点はランキング対象外です。同点ならタイムが短い記録が上位です。期間によるリセットはありません。60秒・10発で挑戦し、アプリを閉じている間も制限時間は進みます。")
                     Text("参加はいつでもやめられ、タイトル画面の「設定」からオンライン記録を削除できます。端末を替えた際の記録の引き継ぎには対応していません。")
                     if let message = model.message { Text(message).foregroundStyle(.orange) }
                     Button { model.join() } label: {

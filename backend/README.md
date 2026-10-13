@@ -29,15 +29,17 @@ node test/smoke.mjs https://omatsuritopia-ranking.hibiki-apps.workers.dev
 
 Apply migrations through `0003_all_time_ranking.sql`, then deploy the Worker before releasing the updated iOS app. The migration copies each player's best surviving weekly record per rules version into `all_time_bests`, preferring a shorter elapsed time on tied scores and the earliest achievement on exact ties. Records already removed by past cleanup cannot be recovered. Existing weekly records and pending rounds remain intact; the new trigger captures scores from both old and new apps. Deploy the new cleanup handler promptly after migration so inactive players with all-time records are retained.
 
-The smoke test creates two temporary anonymous players, checks distinct names and idempotent registration, posts a zero-point result, verifies its rank, and deletes both players in `finally`. Run it only against an endpoint you operate. D1 IDs are configuration, not credentials. For another account, create a separate D1 database and replace `database_id`; ensure both rate-limit namespace IDs are unused there. Never point development migrations at an unrelated database.
+Apply `0004_positive_score_rankings.sql` and deploy the Worker before releasing the app that skips zero-point uploads. The migration changes both ranking triggers to accept only positive scores. Existing records and pending rounds are preserved; the Worker hides legacy zero-point records from both public lists and the caller's rank. The rules version is unchanged so previous positive bests remain eligible. Valid zero-point submissions from older clients still complete their round and support idempotent retries, without creating a new ranking record.
+
+The smoke test creates two temporary anonymous players, checks distinct names and idempotent registration, then submits zero points, a single hit, and zero points again. It verifies zero-score exclusion, positive-score ranking, preservation of the previous best, and retries for both ranking endpoints, then deletes both players in `finally`. Run it only against an endpoint you operate. D1 IDs are configuration, not credentials. For another account, create a separate D1 database and replace `database_id`; ensure both rate-limit namespace IDs are unused there. Never point development migrations at an unrelated database.
 
 ## API and rules
 
 - `POST /v1/players`: register an anonymous player using a client-generated 256-bit hexadecimal bearer token. Idempotent for that token, including concurrent retries. Returns an automatically generated, unique public name and private player ID.
 - `POST /v1/rounds`: authenticated; body `{ "rules": "festival-60-v1" }`. Returns a one-use round ID, start week (for legacy clients), and upload deadline.
-- `POST /v1/rounds/:id/score`: authenticated; `{ rules, elapsedMs, shots: [{ offsetMs, points }] }`. The API derives score/hits, validates timings, and atomically updates the all-time and legacy weekly bests through triggers. Repeating the same result succeeds; modifying it fails.
-- `GET /v1/leaderboard/all-time`: the current app's all-time top 100 plus the caller's rank if authenticated. Returns `{ rules, entries, me }`. Each player appears once with their best score for the current rules version. Exact score/time ties share rank. Private IDs/tokens are excluded.
-- `GET /v1/leaderboard`: legacy weekly ranking, including the original `week` field, for older app versions. Its semantics are unchanged so old apps never label all-time scores as weekly scores.
+- `POST /v1/rounds/:id/score`: authenticated; `{ rules, elapsedMs, shots: [{ offsetMs, points }] }`. The API derives score/hits, validates timings, and atomically updates the all-time and legacy weekly bests through triggers when the score is positive. Zero-point rounds are accepted but do not qualify for ranking. Repeating the same result succeeds; modifying it fails.
+- `GET /v1/leaderboard/all-time`: the current app's all-time top 100 positive scores plus the caller's rank if authenticated. Returns `{ rules, entries, me }`. Each player appears once with their best positive score for the current rules version. `me` is null without a qualifying score. Exact score/time ties share rank. Private IDs/tokens are excluded.
+- `GET /v1/leaderboard`: legacy weekly ranking, including the original `week` field, for older app versions. It also excludes zero-point records while preserving weekly boundaries so old apps never label all-time scores as weekly scores.
 - `DELETE /v1/player`: authenticated; deletes the player and cascades to rounds, all-time records, and weekly records.
 - `GET /health`: service/rules identifier.
 
@@ -53,7 +55,7 @@ Player names use six adjectives, six animals and four digits (360,000 combinatio
 
 Apply `0002_unique_player_names.sql` before deploying this Worker version. It preserves the oldest occurrence of each legacy name and adds `-2`, `-3`, etc. to duplicates, keeping IDs and scores intact. Legacy generated names contain no hyphens. If manually edited names cause a suffix collision, the migration fails and rolls back for inspection instead of deleting data. Existing iOS installations may retain an old name in their local profile cache if a duplicate is renamed; the ranking always uses the server name.
 
-Solo play needs no network. Ranked play must obtain a round before starting. Completed ranked results are persisted before upload and retried on network recovery, foregrounding, or an explicit retry. Expired results are dropped from the upload queue while the personal best remains. A ranked start waits for prior pending results; solo play remains immediately available.
+Solo play needs no network. Ranked play must obtain a round before starting. Completed positive ranked results are persisted before upload and retried on network recovery, foregrounding, or an explicit retry. Zero-point results remain visible locally with encouragement to hit a target; they are not uploaded and do not show a new-best celebration. Zero-point entries left in older app upload queues are ignored. Expired results are dropped from the upload queue while the personal best remains. A ranked start waits for prior pending positive results; solo play remains immediately available.
 
 Before any database access, every request except the database-free `/health` route consumes a source-IP request quota (120/minute). Requests with an Authorization header also consume the existing token quota (120/minute). Both use `REQUEST_LIMIT` with separate keys, so changing or omitting credentials cannot bypass the IP gate. The source is Cloudflare's `CF-Connecting-IP`; missing values share a local fallback, and client-supplied forwarding headers are ignored. Users sharing an IP share its quota. Existing registration retries remain idempotent within these request quotas; new registrations also retain their separate 10/minute IP limit. No new binding or database migration is needed for this request-limit change.
 
@@ -64,6 +66,14 @@ Daily cleanup removes expired rounds after a day and legacy weekly bests after r
 ## iOS verification
 
 Open `OmatsuriTopia.xcodeproj`, select the shared `OmatsuriTopia` scheme, and run tests on a landscape iPhone/iPad simulator. The default UI test checks a ten-shot solo game and personal-best persistence across relaunch.
+
+The UI tests cover zero points after all ten shots miss and after an idle timeout, result confirmation, replay, and best-score persistence. To check upload eligibility, persistence of a previous positive best, and migration of a legacy mixed upload queue without a simulator, run from the repository root:
+
+```sh
+mkdir -p build
+xcrun swiftc OmatsuriTopia/ScoreStore.swift tests/ScoreStoreChecks.swift -o build/ScoreStoreChecks
+build/ScoreStoreChecks
+```
 
 The online UI test is opt-in because it creates and deletes real records. Keep simulator ad-hoc signing enabled for Keychain access; `CODE_SIGNING_ALLOWED=NO` builds cannot register a player. Use a disposable simulator without an existing ranking player:
 

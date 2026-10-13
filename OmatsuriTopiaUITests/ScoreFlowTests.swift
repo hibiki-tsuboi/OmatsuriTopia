@@ -9,6 +9,14 @@ final class ScoreFlowTests: XCTestCase {
         app.buttons["ひとりで遊ぶ"].tap()
 
         for round in 1...2 {
+            if round == 1 {
+                // Aim below the target lanes so all ten shots deterministically miss.
+                let size = app.frame.size
+                let emptyCorner = app.coordinate(withNormalizedOffset: .zero)
+                    .withOffset(CGVector(dx: 40, dy: size.height - 40))
+                app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                    .press(forDuration: 0.05, thenDragTo: emptyCorner)
+            }
             var lastShotStarted: TimeInterval = 0
             for shot in 0..<10 {
                 let size = app.frame.size
@@ -33,8 +41,9 @@ final class ScoreFlowTests: XCTestCase {
             XCTAssertLessThan(transitionTime, 8, "The last shot must not stall the result transition.")
             XCTAssertTrue(app.staticTexts["結果発表"].exists)
             XCTAssertEqual(app.staticTexts["resultEndReason"].label, "10発すべて撃ち終えました")
+            if round == 1 { XCTAssertEqual(app.staticTexts["resultScore"].label, "0") }
             attach(app, name: "LastShot-Round\(round)")
-            XCTAssertTrue(app.staticTexts["自己ベストをこの端末に保存しました"].exists)
+            assertSoloResultMessage(app)
             assertResultWaitsForConfirmation(app)
             app.buttons["resultConfirm"].tap()
             XCTAssertTrue(app.buttons["ひとりで遊ぶ"].waitForExistence(timeout: 3))
@@ -57,6 +66,7 @@ final class ScoreFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["プレイ時間 60.00秒"].exists)
         XCTAssertTrue(app.staticTexts["命中 0/0"].exists)
         XCTAssertTrue(app.staticTexts["命中率 0%"].exists)
+        assertSoloResultMessage(app)
         attach(app, name: "TimeLimit")
         assertResultWaitsForConfirmation(app)
         app.buttons["resultConfirm"].tap()
@@ -82,7 +92,7 @@ final class ScoreFlowTests: XCTestCase {
             }
         }
         XCTAssertTrue(app.staticTexts["resultScore"].waitForExistence(timeout: 8))
-        XCTAssertTrue(app.staticTexts["自己ベストをこの端末に保存しました"].exists)
+        assertSoloResultMessage(app)
         attach(app, name: "Result")
         let best = app.staticTexts["personalBest"].label
         app.terminate()
@@ -124,11 +134,22 @@ final class ScoreFlowTests: XCTestCase {
                 Thread.sleep(forTimeInterval: 0.55)
             }
         }
-        XCTAssertTrue(app.staticTexts["通算ランキングに登録しました"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["resultScore"].waitForExistence(timeout: 8))
+        let scored = app.staticTexts["resultScore"].label != "0"
+        let expectedMessage = scored ? "通算ランキングに登録しました" : "的に当ててランキングに挑戦しよう"
+        XCTAssertTrue(app.staticTexts[expectedMessage].waitForExistence(timeout: 20))
         app.buttons["resultConfirm"].tap()
         XCTAssertTrue(app.buttons["通算ランキング"].waitForExistence(timeout: 3))
         app.buttons["通算ランキング"].tap()
-        XCTAssertTrue(app.staticTexts["あなたの順位"].waitForExistence(timeout: 20))
+        let rankingLoaded = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            app.buttons["戻る"].isEnabled
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [rankingLoaded], timeout: 20), .completed)
+        if scored {
+            XCTAssertTrue(app.staticTexts["あなたの順位"].waitForExistence(timeout: 20))
+        } else {
+            XCTAssertFalse(app.staticTexts["あなたの順位"].exists)
+        }
         attach(app, name: "AllTimeRanking")
         app.buttons["戻る"].tap()
         let best = app.staticTexts["personalBest"].label
@@ -146,6 +167,16 @@ final class ScoreFlowTests: XCTestCase {
         app.buttons["閉じる"].tap()
         XCTAssertTrue(app.buttons["全国に挑戦"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["personalBest"].label, best)
+    }
+
+    private func assertSoloResultMessage(_ app: XCUIApplication) {
+        let isZero = app.staticTexts["resultScore"].label == "0"
+        let message = isZero ? "的に当ててランキングに挑戦しよう" : "自己ベストをこの端末に保存しました"
+        XCTAssertTrue(app.staticTexts[message].exists)
+        if isZero {
+            XCTAssertFalse(app.staticTexts["自己ベスト更新！"].exists)
+            XCTAssertFalse(app.staticTexts["通算ランキングに登録しました"].exists)
+        }
     }
 
     private func assertResultWaitsForConfirmation(_ app: XCUIApplication) {

@@ -137,7 +137,7 @@ async function leaderboard(request, env, now) {
   const rows = await env.DB.prepare(`SELECT p.id, p.name, b.score, b.elapsed_ms AS elapsedMs,
     RANK() OVER (ORDER BY b.score DESC, b.elapsed_ms ASC) AS rank
     FROM weekly_bests b JOIN players p ON p.id = b.player_id
-    WHERE b.week = ? AND b.rules = ? ORDER BY b.score DESC, b.elapsed_ms ASC, b.achieved_at ASC, p.id ASC LIMIT 100`)
+    WHERE b.week = ? AND b.rules = ? AND b.score > 0 ORDER BY b.score DESC, b.elapsed_ms ASC, b.achieved_at ASC, p.id ASC LIMIT 100`)
     .bind(week, RULES).all();
   let me = null;
   if (player) {
@@ -145,7 +145,7 @@ async function leaderboard(request, env, now) {
       1 + (SELECT COUNT(*) FROM weekly_bests other WHERE other.week = b.week AND other.rules = b.rules
         AND (other.score > b.score OR (other.score = b.score AND other.elapsed_ms < b.elapsed_ms))) AS rank
       FROM weekly_bests b JOIN players p ON p.id = b.player_id
-      WHERE b.player_id = ? AND b.week = ? AND b.rules = ?`).bind(player.id, week, RULES).first();
+      WHERE b.player_id = ? AND b.week = ? AND b.rules = ? AND b.score > 0`).bind(player.id, week, RULES).first();
   }
   return json({ week, rules: RULES, entries: rows.results.map(({ id, ...row }) => ({ ...row, isMe: id === player?.id })), me });
 }
@@ -154,7 +154,7 @@ async function allTimeLeaderboard(request, env) {
   const rows = await env.DB.prepare(`SELECT p.id, p.name, b.score, b.elapsed_ms AS elapsedMs,
     RANK() OVER (ORDER BY b.score DESC, b.elapsed_ms ASC) AS rank
     FROM all_time_bests b JOIN players p ON p.id = b.player_id
-    WHERE b.rules = ? ORDER BY b.score DESC, b.elapsed_ms ASC, b.achieved_at ASC, p.id ASC LIMIT 100`)
+    WHERE b.rules = ? AND b.score > 0 ORDER BY b.score DESC, b.elapsed_ms ASC, b.achieved_at ASC, p.id ASC LIMIT 100`)
     .bind(RULES).all();
   let me = null;
   if (player) {
@@ -162,7 +162,7 @@ async function allTimeLeaderboard(request, env) {
       1 + (SELECT COUNT(*) FROM all_time_bests other WHERE other.rules = b.rules
         AND (other.score > b.score OR (other.score = b.score AND other.elapsed_ms < b.elapsed_ms))) AS rank
       FROM all_time_bests b JOIN players p ON p.id = b.player_id
-      WHERE b.player_id = ? AND b.rules = ?`).bind(player.id, RULES).first();
+      WHERE b.player_id = ? AND b.rules = ? AND b.score > 0`).bind(player.id, RULES).first();
   }
   return json({ rules: RULES, entries: rows.results.map(({ id, ...row }) => ({ ...row, isMe: id === player?.id })), me });
 }

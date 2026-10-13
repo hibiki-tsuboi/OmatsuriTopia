@@ -69,10 +69,12 @@ final class FestivalModel: ObservableObject {
     }
 
     func finished(_ result: GameResult) {
-        isNewBest = store.save(result)
+        isNewBest = store.save(result) && result.isRankingEligible
         best = store.best
         self.result = result
-        if let round {
+        if !result.isRankingEligible {
+            submissionMessage = "的に当ててランキングに挑戦しよう"
+        } else if let round {
             store.enqueue(result, round: round)
             submissionMessage = "ランキングに送信しています…"
         } else { submissionMessage = "自己ベストをこの端末に保存しました" }
