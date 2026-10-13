@@ -35,8 +35,8 @@ function environment({ legacy = false } = {}) {
     REQUEST_LIMIT: { limit: async () => ({ success: true }) },
     REGISTER_LIMIT: { limit: async () => ({ success: true }) }
   };
-  const call = (path, method = 'GET', token = null, body = undefined) => worker.fetch(new Request('https://example.com' + path, {
-    method, headers: { ...(token ? { authorization: 'Bearer ' + token } : {}), 'content-type': 'application/json' },
+  const call = (path, method = 'GET', token = null, body = undefined, headers = {}) => worker.fetch(new Request('https://example.com' + path, {
+    method, headers: { ...(token ? { authorization: 'Bearer ' + token } : {}), 'content-type': 'application/json', ...headers },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {})
   }), env);
   return { sqlite, env, call };
@@ -47,6 +47,16 @@ const allTimePath = '/v1/leaderboard/all-time';
 const valid = (points = 50) => ({ rules: RULES, elapsedMs: 10000, shots: Array.from({ length: 10 }, (_, i) => ({ offsetMs: (i + 1) * 1000, points })) });
 async function register(call, key = token) { const r = await call('/v1/players', 'POST', key); assert.ok(r.ok); return r.json(); }
 async function start(call, key = token) { const r = await call('/v1/rounds', 'POST', key, { rules: RULES }); assert.equal(r.status, 201); return r.json(); }
+
+function countingRequestLimit() {
+  const counts = new Map();
+  return { async limit({ key }) {
+    const windowKey = `${Math.floor(Date.now() / 60000)}:${key}`;
+    const count = (counts.get(windowKey) ?? 0) + 1;
+    counts.set(windowKey, count);
+    return { success: count <= 120 };
+  } };
+}
 
 test('JST week changes exactly at Monday midnight including year boundary', () => {
   assert.equal(weekFor(Date.parse('2026-10-04T14:59:59Z')), '2026-09-28');
@@ -275,6 +285,92 @@ test('registration throttling preserves retries for an existing identity', async
   env.REGISTER_LIMIT.limit = async () => ({ success: false });
   assert.deepEqual(await (await call('/v1/players', 'POST', token)).json(), profile);
   assert.equal((await call('/v1/players', 'POST', other)).status, 429);
+});
+
+test('IP quota stops rotating unknown tokens before any database route', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-07T00:00:00Z') });
+  const { call, env, sqlite } = environment();
+  t.after(() => sqlite.close());
+  env.REQUEST_LIMIT = countingRequestLimit();
+  const prepare = t.mock.method(env.DB, 'prepare');
+  const headers = { 'cf-connecting-ip': '192.0.2.1' };
+  for (let i = 0; i < 120; i++) {
+    const unknown = i.toString(16).padStart(64, '0');
+    assert.equal((await call('/v1/rounds', 'POST', unknown, { rules: RULES }, headers)).status, 401);
+  }
+  const queries = prepare.mock.callCount();
+  assert.equal(queries, 120);
+  const routes = [
+    ['/v1/players', 'POST'], ['/v1/rounds', 'POST'],
+    ['/v1/rounds/00000000-0000-0000-0000-000000000000/score', 'POST'],
+    ['/v1/player', 'DELETE'], ['/v1/leaderboard', 'GET'], [allTimePath, 'GET'], ['/unknown', 'GET']
+  ];
+  for (const [path, method] of routes) {
+    for (const key of [other, 'malformed', null]) {
+      const response = await call(path, method, key, undefined, headers);
+      assert.equal(response.status, 429, `${method} ${path}`);
+    }
+  }
+  assert.equal(prepare.mock.callCount(), queries, 'blocked requests must not query D1');
+  assert.equal((await call('/health', 'GET', null, undefined, headers)).status, 200);
+  assert.equal(prepare.mock.callCount(), queries);
+  assert.equal((await call('/v1/rounds', 'POST', other, undefined,
+    { 'cf-connecting-ip': '192.0.2.2' })).status, 401, 'another source IP has its own quota');
+  t.mock.timers.tick(60000);
+  assert.equal((await call('/v1/leaderboard', 'GET', null, undefined, headers)).status, 200);
+});
+
+test('missing source IP uses one fallback quota despite spoofed forwarding headers', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-07T00:00:00Z') });
+  const { call, env, sqlite } = environment();
+  t.after(() => sqlite.close());
+  env.REQUEST_LIMIT = countingRequestLimit();
+  for (let i = 0; i < 120; i++) {
+    assert.equal((await call('/v1/rounds', 'POST', i.toString(16).padStart(64, '0'), undefined,
+      { 'x-forwarded-for': `192.0.2.${i}`, 'x-real-ip': `192.0.2.${i}` })).status, 401);
+  }
+  const prepare = t.mock.method(env.DB, 'prepare');
+  for (const headers of [{}, { 'cf-connecting-ip': '' },
+    { 'x-forwarded-for': '198.51.100.1', 'x-real-ip': '198.51.100.1', authorization: 'Basic anything' }]) {
+    assert.equal((await call(allTimePath, 'GET', other, undefined, headers)).status, 429);
+  }
+  assert.equal(prepare.mock.callCount(), 0);
+});
+
+test('token quota still applies when a registered player changes source IP', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-07T00:00:00Z') });
+  const { call, env, sqlite } = environment();
+  t.after(() => sqlite.close());
+  await register(call);
+  env.REQUEST_LIMIT = countingRequestLimit();
+  for (let i = 0; i < 120; i++) {
+    assert.equal((await call(allTimePath, 'GET', token, undefined,
+      { 'cf-connecting-ip': `192.0.2.${i}` })).status, 200);
+  }
+  const prepare = t.mock.method(env.DB, 'prepare');
+  assert.equal((await call(allTimePath, 'GET', token, undefined,
+    { 'cf-connecting-ip': '198.51.100.1' })).status, 429);
+  assert.equal(prepare.mock.callCount(), 0);
+});
+
+test('IP and token quotas preserve shared-IP registration, score retries and deletion', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-07T00:00:00Z') });
+  const { call, env, sqlite } = environment();
+  t.after(() => sqlite.close());
+  env.REQUEST_LIMIT = countingRequestLimit();
+  const shared = (path, method, key, body) => call(path, method, key, body, { 'cf-connecting-ip': '192.0.2.1' });
+  const profile = await register(shared);
+  await register(shared, other);
+  env.REGISTER_LIMIT.limit = async () => ({ success: false });
+  assert.deepEqual(await register(shared), profile, 'existing registration is still idempotent');
+  const round = await start(shared);
+  t.mock.timers.tick(10000);
+  const path = `/v1/rounds/${round.id}/score`;
+  assert.equal((await shared(path, 'POST', token, valid())).status, 200);
+  assert.equal((await shared(path, 'POST', token, valid())).status, 200);
+  assert.equal((await shared(allTimePath, 'GET', null)).status, 200);
+  assert.equal((await shared('/v1/player', 'DELETE', token)).status, 204);
+  assert.equal((await shared(allTimePath, 'GET', other)).status, 200);
 });
 
 test('scheduled cleanup expires rounds, weekly bests and scoreless players but retains all-time records', async t => {

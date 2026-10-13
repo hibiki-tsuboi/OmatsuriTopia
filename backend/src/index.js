@@ -172,9 +172,14 @@ export default {
       const now = Date.now();
       const path = new URL(request.url).pathname;
       if (request.method === 'GET' && path === '/health') return json({ status: 'ok', rules: RULES });
-      // Token counters are stable for players; guests share a generous IP-based read limit.
-      const rateKey = await hash(request.headers.get('authorization') || request.headers.get('cf-connecting-ip') || 'local');
-      if (!(await env.REQUEST_LIMIT.limit({ key: rateKey })).success) throw new APIError(429, 'しばらく待ってから再度お試しください。');
+      // Gate every database path by the edge-provided IP, even when credentials rotate.
+      // Prefix IP keys so they cannot share counters with the existing token hashes.
+      const rateKeys = [`ip:${await hash(request.headers.get('cf-connecting-ip') || 'local')}`];
+      const authorization = request.headers.get('authorization');
+      if (authorization) rateKeys.push(await hash(authorization));
+      for (const key of rateKeys) {
+        if (!(await env.REQUEST_LIMIT.limit({ key })).success) throw new APIError(429, 'しばらく待ってから再度お試しください。');
+      }
       if (request.method === 'POST' && path === '/v1/players') return await register(request, env, now);
       if (request.method === 'GET' && path === '/v1/leaderboard') return await leaderboard(request, env, now);
       if (request.method === 'GET' && path === '/v1/leaderboard/all-time') return await allTimeLeaderboard(request, env);
