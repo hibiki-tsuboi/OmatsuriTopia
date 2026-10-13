@@ -7,6 +7,7 @@ class GameViewController: UIViewController {
     private let model = FestivalModel()
     private let gameView = SKView()
     private var overlay: UIHostingController<FestivalOverlay>?
+    private var resultOverlay: UIHostingController<FestivalResultOverlay>?
     private var subscription: AnyCancellable?
 
     override func viewDidLoad() {
@@ -39,8 +40,7 @@ class GameViewController: UIViewController {
         host.didMove(toParent: self)
         overlay = host
         subscription = model.$screen.removeDuplicates().sink { [weak self] screen in
-            self?.overlay?.view.isHidden = screen == .playing
-            self?.gameView.isHidden = screen != .playing
+            self?.show(screen)
         }
         NotificationCenter.default.addObserver(self, selector: #selector(becameActive), name: UIApplication.didBecomeActiveNotification, object: nil)
     }
@@ -53,11 +53,48 @@ class GameViewController: UIViewController {
             // Finish the SpriteKit touch/update callback before changing UIKit/SwiftUI views.
             DispatchQueue.main.async {
                 guard let self, let scene, self.gameView.scene === scene else { return }
-                self.gameView.presentScene(nil)
                 self.model.finished(result)
             }
         }
         gameView.presentScene(scene)
+    }
+
+    private func show(_ screen: FestivalModel.Screen) {
+        let showsGame = screen == .playing || screen == .result
+        overlay?.view.isHidden = showsGame
+        gameView.isHidden = !showsGame
+        gameView.isUserInteractionEnabled = screen == .playing
+
+        if screen == .result {
+            presentResult()
+        } else if !showsGame {
+            // Keep the finished scene behind the modal until the player confirms.
+            gameView.presentScene(nil)
+        }
+    }
+
+    private func presentResult() {
+        guard resultOverlay == nil else { return }
+        let host = UIHostingController(rootView: FestivalResultOverlay(model: model) { [weak self] in
+            self?.returnToTitle()
+        })
+        host.modalPresentationStyle = .overFullScreen
+        host.modalTransitionStyle = .crossDissolve
+        host.isModalInPresentation = true
+        host.view.backgroundColor = .clear
+        host.view.accessibilityViewIsModal = true
+        resultOverlay = host
+        present(host, animated: true)
+    }
+
+    private func returnToTitle() {
+        guard let resultOverlay else { return }
+        model.message = nil
+        model.screen = .home
+        overlay?.view.layoutIfNeeded()
+        // Reveal the title directly, without briefly returning to the finished game.
+        resultOverlay.dismiss(animated: false)
+        self.resultOverlay = nil
     }
 
     @objc private func becameActive() {
